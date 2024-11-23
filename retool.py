@@ -134,7 +134,7 @@ def create_analytics_dashboard():
 
         # General Metrics Section
         st.header('General Metrics')
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
 
         # 1. Average streams per week per user
         if not streams.empty:
@@ -154,12 +154,19 @@ def create_analytics_dashboard():
             total_streams = len(streams)
             col2.metric("Total Streams Processed", total_streams)
 
+        # 3. Total Users
+        if not users.empty:
+            total_users = len(users)
+            col3.metric("Total Users", total_users)
+        else:
+            col3.metric("Premium Users", premium_users)
+
         # Premium Users Count
         if not users.empty:
             premium_users = users[users['is_paying'] == True].shape[0]
-            col3.metric("Premium Users", premium_users)
+            col4.metric("Premium Users", premium_users)
         else:
-            col3.metric("Premium Users", "No data")
+            col4.metric("Premium Users", "No data")
 
         # Average Streams per User by 7-Day Intervals
         st.header('Average Streams per User (7-Day Intervals)')
