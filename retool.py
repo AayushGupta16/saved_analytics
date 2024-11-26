@@ -7,7 +7,10 @@ from matplotlib.dates import DateFormatter
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 
 def get_weekly_intervals(df, date_column, count_column=None):
     if df.empty:
@@ -89,31 +92,12 @@ def get_avg_streams_per_user(df, date_column):
 
 def create_analytics_dashboard():
     # Initialize Supabase client
-    supabase_url = "https://tadaxxjkkpymnkbkentw.supabase.co"
-    supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhZGF4eGpra3B5bW5rYmtlbnR3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMjEzOTAxMCwiZXhwIjoyMDQ3NzE1MDEwfQ.rWTZmM9DnIeYN-Tn5fv0Y8wMnjQ2XUNC4Nmz4yLeiWc"
+    supabase_url = os.getenv('SUPABASE_URL')
+    supabase_key = os.getenv('SUPABASE_KEY')
     supabase = create_client(supabase_url, supabase_key)
 
     # List of developer user IDs to exclude
-    developer_ids = [
-        "user_2mfvenyyJlwzVIWISkpa9FptHXE",
-        "user_2mlTXafs7gvt3D2XokQAKjAqMzJ",
-        "user_2nWAJDrXmr9VYCR5tD2TXYKVwD7",
-        "user_2mbEjrcgFIjOwDtpGON9OqwEqfy",
-        "user_2mlU7EwnN2HsijcIULdYQuVQEcw",
-        "user_2o0FCZiOFubFYN8KHd9jWcjEyGD",
-        "user_2o0FItSMjVBTI3IvR2VPAV8ymor",
-        "user_2n54XTaQmj2cXrTXsfrBhCTmosS",
-        "user_2naTaJNHex6aXQgjyvuvzjEWELW",
-        "user_2nIpiae6s15Q8byrpdTNJzcpNt1",
-        "user_2kaSMQKIzSeNuN1IwFgPk4LZoKR",
-        "user_2o4frQEa3wJ7tCGXLZC3FXUWWHV",
-        "user_2nJrfJNMNtBTrvzAJYTiDSKfrwZ",
-        "user_2npYXUzUsxYZ0SoYm7cuYXDsHJi",
-        "user_2p3Z2fcb5DiZyGW0gIsiD544Gd1",
-        "user_2nicNEBMipsfpIbe4Bliqb6juKp",
-        "user_2kaSMQKIzSeNuN1IwFgPk4LZoKR",
-        "user_2mieKl52v6QyPryZaDcH9nLGWR0"
-    ]
+    developer_ids = os.getenv('DEVELOPER_IDS').split(',')
 
     try:
         # Fetch data from all tables
