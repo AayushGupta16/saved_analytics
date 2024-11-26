@@ -92,13 +92,13 @@ def get_avg_streams_per_user(df, date_column):
 
 def create_analytics_dashboard():
     # Initialize Supabase client
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_KEY')
+    supabase_url = st.secrets["env"]["SUPABASE_URL"]
+    supabase_key = st.secrets["env"]["SUPABASE_KEY"]
     supabase = create_client(supabase_url, supabase_key)
 
     # List of developer user IDs to exclude
-    developer_ids = os.getenv('DEVELOPER_IDS').split(',')
-
+    developer_ids = st.secrets["env"]["DEVELOPER_IDS"].split(',')
+    
     try:
         # Fetch data from all tables
         streams = pd.DataFrame(supabase.from_('Streams').select('*').execute().data)
