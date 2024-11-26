@@ -4,3 +4,4 @@ pandas
 matplotlib
 plotly
 numpy
+python-dotenv
