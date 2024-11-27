@@ -90,6 +90,82 @@ def get_avg_streams_per_user(df, date_column):
         'avg_streams': avgs
     })
 
+def get_monthly_total_streams(streams_df, date_column='created_at'):
+    if streams_df.empty:
+        return pd.DataFrame()
+    
+    df = streams_df.copy()
+    df[date_column] = pd.to_datetime(df[date_column])
+    
+    monthly_totals = df.groupby(pd.Grouper(key=date_column, freq='ME')).size().reset_index()
+    monthly_totals.columns = ['date', 'total_streams']
+    
+    monthly_totals['mom_growth'] = monthly_totals['total_streams'].pct_change() * 100
+    monthly_totals['mom_growth'] = monthly_totals['mom_growth'].round(2)
+    
+    return monthly_totals
+
+def get_monthly_active_users(streams_df, date_column='created_at'):
+    if streams_df.empty:
+        return pd.DataFrame()
+    
+    df = streams_df.copy()
+    df[date_column] = pd.to_datetime(df[date_column])
+    
+    monthly_users = df.groupby(pd.Grouper(key=date_column, freq='ME'))['user_id'].nunique().reset_index()
+    monthly_users.columns = ['date', 'total_users']
+    
+    monthly_users['mom_growth'] = monthly_users['total_users'].pct_change() * 100
+    monthly_users['mom_growth'] = monthly_users['mom_growth'].round(2)
+    
+    return monthly_users
+
+def get_monthly_retention(streams_df, date_column='created_at'):
+    if streams_df.empty:
+        return pd.DataFrame()
+    
+    df = streams_df.copy()
+    df[date_column] = pd.to_datetime(df[date_column])
+    
+    # Get user activity by month
+    user_monthly = df.groupby([pd.Grouper(key=date_column, freq='M'), 'user_id']).size().reset_index()
+    
+    retention_data = []
+    months = sorted(user_monthly[date_column].unique())
+    
+    for i in range(1, len(months)):
+        current_month = months[i]
+        previous_month = months[i-1]
+        
+        # Get users in previous month
+        previous_users = set(user_monthly[user_monthly[date_column] == previous_month]['user_id'])
+        
+        # Get users in current month
+        current_users = set(user_monthly[user_monthly[date_column] == current_month]['user_id'])
+        
+        # Find retained users (users from previous month who are also in current month)
+        retained_users = len(previous_users.intersection(current_users))
+        previous_users_count = len(previous_users)
+        
+        # Calculate retention rate
+        retention_rate = (retained_users / previous_users_count * 100) if previous_users_count > 0 else 0
+        
+        retention_data.append({
+            'date': current_month,
+            'retention_rate': round(retention_rate, 2),
+            'retained_count': retained_users,
+            'previous_month_count': previous_users_count
+        })
+    
+    retention_df = pd.DataFrame(retention_data)
+    
+    # Calculate MoM growth in retention rate
+    if not retention_df.empty:
+        retention_df['mom_growth'] = retention_df['retention_rate'].pct_change() * 100
+        retention_df['mom_growth'] = retention_df['mom_growth'].round(2)
+    
+    return retention_df
+
 def create_analytics_dashboard():
     # Initialize Supabase client
     supabase_url = st.secrets["env"]["SUPABASE_URL"]
@@ -98,7 +174,7 @@ def create_analytics_dashboard():
 
     # List of developer user IDs to exclude
     developer_ids = st.secrets["env"]["DEVELOPER_IDS"].split(',')
-    
+
     try:
         # Fetch data from all tables
         streams = pd.DataFrame(supabase.from_('Streams').select('*').execute().data)
@@ -132,11 +208,66 @@ def create_analytics_dashboard():
                 col1.metric("Avg Streams/Week/User", "0")
         else:
             col1.metric("Avg Streams/Week/User", "No data")
-            
-        # Total Streams
+        
+
         if not streams.empty:
+            monthly_streams = get_monthly_total_streams(streams)
+            st.header('Monthly Total Streams')
             total_streams = len(streams)
             col2.metric("Total Streams Processed", total_streams)
+            
+            fig = px.line(
+                monthly_streams,
+                x='date',
+                y='total_streams',
+                text='mom_growth',  # Add this line to include the text data
+                title='Monthly Total Streams with MoM Growth',
+                markers=True,
+                color_discrete_sequence=['#9c27b0']
+            )
+            
+            fig.update_layout(
+                hovermode='x',
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font=dict(
+                        color="black",
+                        size=14
+                    ),
+                    bordercolor="black"
+                ),
+                title=dict(
+                    text='Monthly Total Streams with MoM Growth',
+                    x=0.5,
+                    y=0.95,
+                    xanchor='center',
+                    yanchor='top',
+                    font=dict(
+                        size=24
+                    )
+                ),
+                xaxis_title="Date",
+                yaxis_title="Total Streams",
+                height=600,
+                xaxis=dict(tickangle=-45)
+            )
+            
+            fig.update_traces(
+                line=dict(width=2, color='#9c27b0'),
+                marker=dict(size=10, color='#9c27b0'),
+                texttemplate="+%{text:.1f}%",
+                textposition="top center",
+                textfont=dict(size=14),
+                hovertemplate="<br>".join([
+                    "<b>Date:</b> %{x|%Y-%m-%d}",
+                    "<b>Monthly Streams:</b> %{y}",
+                    "<b>MoM Growth:</b> %{text:.1f}%",
+                    "<extra></extra>"
+                ])
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(monthly_streams.sort_values('date', ascending=False))
 
         # 3. Total Users
         if not users.empty:
@@ -261,6 +392,64 @@ def create_analytics_dashboard():
             st.subheader("7-Day Interval Stream Data")
             st.dataframe(weekly_activity.sort_values('date', ascending=False))
 
+        #MoM Active Users
+        if not streams.empty:
+            monthly_users = get_monthly_active_users(streams)
+            st.header('Monthly Active Users')
+
+            fig = px.line(
+                monthly_users,
+                x='date',
+                y='total_users',
+                text='mom_growth',
+                title='Monthly Active Users with MoM Growth',
+                markers=True,
+                color_discrete_sequence=['#FF69B4']
+            )
+            
+            fig.update_layout(
+                hovermode='x',
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font=dict(
+                        color="black",
+                        size=14
+                    ),
+                    bordercolor="black"
+                ),
+                title=dict(
+                    text='Monthly Active Users with MoM Growth',
+                    x=0.5,
+                    y=0.95,
+                    xanchor='center',
+                    yanchor='top',
+                    font=dict(
+                        size=24
+                    )
+                ),
+                xaxis_title="Date",
+                yaxis_title="Total Active Users",
+                height=600,
+                xaxis=dict(tickangle=-45)
+            )
+            
+            fig.update_traces(
+                line=dict(width=2, color='#FF69B4'),
+                marker=dict(size=10, color='#FF69B4'),
+                texttemplate="+%{text:.1f}%",
+                textposition="top center",
+                textfont=dict(size=14),
+                hovertemplate="<br>".join([
+                    "<b>Date:</b> %{x|%Y-%m-%d}",
+                    "<b>Monthly Active Users:</b> %{y}",
+                    "<b>MoM Growth:</b> %{text:.1f}%",
+                    "<extra></extra>"
+                ])
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(monthly_users.sort_values('date', ascending=False))
+
         # Active Users by 7-Day Intervals
         st.header('Active Users (7-Day Intervals)')
         if not streams.empty:
@@ -315,6 +504,69 @@ def create_analytics_dashboard():
             
             st.subheader("7-Day Interval Active Users Data")
             st.dataframe(weekly_users.sort_values('date', ascending=False))
+
+        #Retention
+        if not streams.empty:
+            monthly_retention = get_monthly_retention(streams)
+            st.header('Monthly Retention')
+                
+            fig = px.line(
+                monthly_retention,
+                x='date',
+                y='retention_rate',
+                text='mom_growth',
+                title='Monthly Retention with MoM Growth',
+                markers=True,
+                color_discrete_sequence=['#FFD700']
+            )
+
+            fig.update_layout(
+                hovermode='x',
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font=dict(
+                        color="black",
+                        size=14
+                    ),
+                    bordercolor="black"
+                ),
+                title=dict(
+                    text='Monthly Retention with MoM Growth',
+                    x=0.5,
+                    y=0.95,
+                    xanchor='center',
+                    yanchor='top',
+                    font=dict(
+                        size=24
+                    )
+                ),
+                xaxis_title="Date",
+                yaxis_title="Retention Rate (%)",
+                height=600,
+                xaxis=dict(tickangle=-45)
+            )
+
+            fig.update_traces(
+                line=dict(width=2, color='#FFD700'),
+                marker=dict(size=10, color='#FFD700'),
+                texttemplate="<br>".join([
+                    "%{text:.1f}%" if "%{text}" != "nan" else ""  # Don't show anything for NaN values
+                ]),
+                textposition="top center",
+                textfont=dict(size=14),
+                hovertemplate="<br>".join([
+                    "<b>Date:</b> %{x|%Y-%m-%d}",
+                    "<b>Retention Rate:</b> %{y:.1f}%",
+                    "<b>Previous Month Users:</b> %{customdata[0]}",
+                    "<b>Retained Users:</b> %{customdata[1]}",
+                    "<b>MoM Growth:</b> %{text:.1f}%" if "%{text}" != "nan" else "<b>MoM Growth:</b> N/A",
+                    "<extra></extra>"
+                ]),
+                customdata=monthly_retention[['previous_month_count', 'retained_count']]
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(monthly_retention.sort_values('date', ascending=False))
 
         # New Users by 7-Day Intervals
         st.header('New User Signups (7-Day Intervals)')
