@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone
 # Import metric components
 from metrics.avg_streams_per_user import display_avg_streams_per_user
-from metrics.highlight_feedback import display_highlight_like_ratio, display_highlight_share_ratio
+from metrics.highlight_feedback import display_highlight_like_ratio, display_highlight_share_ratio, get_weekly_metrics
 from metrics.new_user_signups import display_new_user_signups
 from metrics.weekly_intervals import display_weekly_streams, display_weekly_active_users
 
@@ -14,15 +14,30 @@ from metrics.weekly_intervals import display_weekly_streams, display_weekly_acti
 load_dotenv()
 
 
-def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame) -> None:
+def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame, highlights: pd.DataFrame) -> None:
     """
     Display the summary metrics section with improved layout and calculations
     """
     st.header('Summary Metrics', divider='blue')
     
-    # Create three rows of metrics for better spacing
-    row1_cols = st.columns([1, 1, 1])  # Top row for most important metrics
-    row2_cols = st.columns([1, 1, 1])  # Second row for other metrics
+    # Create two rows of metrics with 4 columns each
+    row1_cols = st.columns(4)  # Top row
+    row2_cols = st.columns(4)  # Second row
+
+    # Ensure timestamps are in datetime format
+    current_date = pd.Timestamp.now(tz='UTC')
+    month_start = current_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    prev_month_start = (month_start - pd.Timedelta(days=1)).replace(day=1)
+    
+    if not highlights.empty:
+        highlights = highlights.copy()
+        if not pd.api.types.is_datetime64_any_dtype(highlights['created_at']):
+            highlights['created_at'] = pd.to_datetime(highlights['created_at'], utc=True)
+    
+    if not streams.empty:
+        streams = streams.copy()
+        if not pd.api.types.is_datetime64_any_dtype(streams['created_at']):
+            streams['created_at'] = pd.to_datetime(streams['created_at'], utc=True)
     
     # 1. MRR (Most important)
     with row1_cols[0]:
@@ -40,16 +55,47 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame) -> None:
             help="Number of paid users in the current month"
         )
 
-    # 3. Highlight Agreement Rate
+    # 3. Share Rate (New)
     with row1_cols[2]:
-        st.metric(
-            "Highlight Agreement Rate",
-            "8.6%",
-            help="Percentage of highlights that match human agreement"
-        )
+        if not highlights.empty:
+            df = highlights.copy()
+            
+            # Calculate share ratio the same way as in highlight_feedback.py
+            df['share_ratio'] = ((df['downloaded'] | df['link_copied']).astype(float) * 100)
+            
+            # Get weekly data using the same function as the graph
+            weekly_data = get_weekly_metrics(
+                df,
+                date_column='created_at',
+                value_column='share_ratio',
+                agg_function='mean'
+            )
+            
+            if not weekly_data.empty:
+                # Get the latest week's data (excluding current week-in-progress)
+                latest_complete_week = weekly_data[~weekly_data['is_extrapolated']].iloc[-1]
+                share_ratio = latest_complete_week['value']
+                
+                # Get previous week for delta
+                if len(weekly_data[~weekly_data['is_extrapolated']]) > 1:
+                    prev_week = weekly_data[~weekly_data['is_extrapolated']].iloc[-2]
+                    delta = share_ratio - prev_week['value']
+                else:
+                    delta = None
+                
+                st.metric(
+                    "Share Rate (Week)",
+                    f"{share_ratio:.1f}%",
+                    f"{delta:+.1f}%" if delta is not None else None,
+                    help="Percentage of highlights that were downloaded or had their link copied (last complete week)"
+                )
+            else:
+                st.metric("Share Rate (Week)", "0.0%")
+        else:
+            st.metric("Share Rate (Week)", "No data")
 
     # 4. Average Streams per Week per User
-    with row2_cols[0]:
+    with row1_cols[3]:
         if not streams.empty:
             today = pd.Timestamp.now(tz='UTC')
             last_week_start = today - pd.Timedelta(days=today.weekday() + 7)
@@ -65,19 +111,74 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame) -> None:
                 avg_streams = user_streams.mean()
                 
                 st.metric(
-                    "Last Week's Average Streams/User",
+                    "Avg Streams/User (Week)",
                     f"{avg_streams:.1f}",
                     help="Average number of streams per user for the last complete week"
                 )
             else:
-                st.metric("Last Week's Average Streams/User", "0.0")
+                st.metric("Avg Streams/User (Week)", "0.0")
         else:
-            st.metric("Last Week's Average Streams/User", "No data")
+            st.metric("Avg Streams/User (Week)", "No data")
 
-    # 5. Monthly Active Users (MAU)
+    # 5. Like/Dislike Ratio (New)
+    with row2_cols[0]:
+        if not highlights.empty:
+            current_month_data = highlights[highlights['created_at'] >= month_start]
+            current_month_data = current_month_data[current_month_data['liked'].notna()]
+            
+            if not current_month_data.empty:
+                likes = (current_month_data['liked'] == True).sum()
+                dislikes = (current_month_data['liked'] == False).sum()
+                total_rated = likes + dislikes
+                
+                if total_rated > 0:
+                    like_ratio = (likes / total_rated * 100)
+                    
+                    # Get previous month's data for delta
+                    prev_month_data = highlights[
+                        (highlights['created_at'] >= prev_month_start) &
+                        (highlights['created_at'] < month_start)
+                    ]
+                    prev_month_data = prev_month_data[prev_month_data['liked'].notna()]
+                    
+                    prev_ratio = 0
+                    if not prev_month_data.empty:
+                        prev_likes = (prev_month_data['liked'] == True).sum()
+                        prev_dislikes = (prev_month_data['liked'] == False).sum()
+                        prev_total = prev_likes + prev_dislikes
+                        if prev_total > 0:
+                            prev_ratio = (prev_likes / prev_total * 100)
+                    
+                    delta = like_ratio - prev_ratio if prev_ratio > 0 else None
+                    
+                    st.metric(
+                        "Like Ratio (Month)",
+                        f"{like_ratio:.1f}%",
+                        f"{delta:+.1f}%" if delta is not None else None,
+                        help=f"Percentage of rated highlights marked as liked this month ({likes}/{total_rated} highlights)"
+                    )
+                else:
+                    st.metric(
+                        "Like Ratio (Month)",
+                        "N/A",
+                        help="No rated highlights this month"
+                    )
+            else:
+                st.metric("Like Ratio (Month)", "N/A")
+        else:
+            st.metric("Like Ratio (Month)", "No data")
+
+    # 6. Highlight Agreement Rate (Preserved)
     with row2_cols[1]:
+        st.metric(
+            "Highlight Agreement Rate",
+            "8.6%",
+            help="Percentage of highlights that match human agreement"
+        )
+
+    # 7. Monthly Active Users (MAU)
+    with row2_cols[2]:
         if not streams.empty:
-            current_date = pd.Timestamp.now(tz='UTC')
             thirty_days_ago = current_date - pd.Timedelta(days=30)
             active_users = len(streams[streams['created_at'] >= thirty_days_ago]['user_id'].unique())
             
@@ -89,8 +190,8 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame) -> None:
         else:
             st.metric("Monthly Active Users", "No data")
 
-    # 6. Premium Users (kept as requested)
-    with row2_cols[2]:
+    # 8. Premium Users
+    with row2_cols[3]:
         if not users.empty:
             premium_users = users[users['is_paying'] == True].shape[0]
             total_users = len(users)
@@ -142,6 +243,8 @@ def create_analytics_dashboard():
             streams['created_at'] = pd.to_datetime(streams['created_at'], utc=True)
         if not users.empty:
             users['created_at'] = pd.to_datetime(users['created_at'], utc=True)
+        if not highlights.empty:
+            highlights['created_at'] = pd.to_datetime(highlights['created_at'], utc=True)
 
         # Main dashboard title with styling
         st.title('📊 Platform Analytics Dashboard')
@@ -152,7 +255,7 @@ def create_analytics_dashboard():
         st.sidebar.info(f"Data last updated: {last_update.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
         # Display summary metrics
-        display_summary_metrics(streams, users)
+        display_summary_metrics(streams, users, highlights)
 
         # Create tabs for different metric categories
         tabs = st.tabs(["User Activity", "Growth", "Highlight Feedback"])
