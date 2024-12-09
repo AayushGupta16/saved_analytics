@@ -27,14 +27,10 @@ def get_fixed_weekly_intervals(df, date_column):
 
 def get_weekly_signups(users_df, date_column='created_at'):
     """
-    Gets weekly signup data with debug logging.
+    Gets weekly signup data with proper extrapolation for the current week.
     """
     if users_df.empty:
-        print("Input dataframe is empty")
         return pd.DataFrame()
-    
-    # Add debug logging
-    print("\n=== Debug Information ===")
     
     # Ensure datetime is UTC and copy the dataframe
     df = users_df.copy()
@@ -42,29 +38,21 @@ def get_weekly_signups(users_df, date_column='created_at'):
     
     # Get current time and week boundary
     today = pd.Timestamp.now(tz='UTC')
-    print(f"Current time (UTC): {today}")
     
     # Calculate the start of the current week (Sunday)
     days_since_sunday = today.weekday() + 1  # +1 because weekday() considers Monday as 0
     current_week_start = (today - pd.Timedelta(days=days_since_sunday if days_since_sunday < 7 else 0))
     current_week_start = current_week_start.replace(hour=0, minute=0, second=0, microsecond=0)
-    print(f"Current week start: {current_week_start}")
     
     # Calculate days elapsed in current week
     days_elapsed = (today - current_week_start).days + 1
-    print(f"Days elapsed in current week: {days_elapsed}")
     
     # Define fixed week start date (Sept 29, 2024)
     start_date = pd.Timestamp('2024-09-29', tz='UTC')
-    print(f"Fixed start date: {start_date}")
     
     # Calculate week numbers and starts for all data points
     df['week_number'] = ((df[date_column] - start_date) // pd.Timedelta(weeks=1)) + 1
     df['week_start'] = start_date + (df['week_number'] - 1) * pd.Timedelta(weeks=1)
-    
-    # Print sample of data points
-    print("\nSample data points:")
-    print(df[[date_column, 'week_start']].head())
     
     # Remove any future data
     df = df[df[date_column] <= today]
@@ -74,47 +62,29 @@ def get_weekly_signups(users_df, date_column='created_at'):
     current_week_data = df[current_week_mask]
     historical_data = df[~current_week_mask]
     
-    print(f"\nCurrent week data count: {len(current_week_data)}")
-    if not current_week_data.empty:
-        print("Current week signup dates:")
-        print(current_week_data[date_column].tolist())
-    
-    print(f"Historical data count: {len(historical_data)}")
-    
     # Process historical data
     weekly_signups = historical_data.groupby('week_start').size().reset_index(name='new_users')
     weekly_signups['is_extrapolated'] = False
     
     # Handle current week projection if we have data
     if not current_week_data.empty:
-        # Get actual signup count for current week
+        # Get current week signup count
         current_signups = len(current_week_data)
-        print(f"\nActual signups in current week: {current_signups}")
         
-        # For early week (<=3 days), just show actuals
-        if days_elapsed <= 3:
-            estimated_signups = current_signups
-            print("Early in week - using actual numbers")
-        else:
-            # Project based on current rate, but never less than actual
-            raw_projection = (current_signups / days_elapsed) * 7
-            estimated_signups = int(np.ceil(max(raw_projection, current_signups)))
-            print(f"Projection calculation: ({current_signups} / {days_elapsed}) * 7 = {raw_projection}")
+        # Ensure we don't divide by zero
+        days_elapsed = max(1, days_elapsed)
         
-        print(f"Final estimated signups: {estimated_signups}")
+        # Extrapolate to full week
+        estimated_signups = int(np.ceil((current_signups / days_elapsed) * 7))
         
-        # Add current week data
+        # Add current week as extrapolated data
         current_week_row = pd.DataFrame({
             'week_start': [current_week_start],
             'new_users': [estimated_signups],
-            'is_extrapolated': [True]
+            'is_extrapolated': [True]  # Always mark current week as extrapolated
         })
         
         weekly_signups = pd.concat([weekly_signups, current_week_row], ignore_index=True)
-    
-    print("\nFinal weekly data:")
-    print(weekly_signups)
-    print("=== End Debug Information ===\n")
     
     return weekly_signups.sort_values('week_start', ascending=False)
 
@@ -216,5 +186,3 @@ def display_new_user_signups(users_df):
         display_df.sort_values('Week Starting', ascending=False),
         hide_index=True
     )
-
-    get_weekly_signups()
