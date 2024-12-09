@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 
 # Import metric components
 from metrics.avg_streams_per_user import display_avg_streams_per_user
-from metrics.monthly_total_streams import display_monthly_total_streams
 from metrics.monthly_active_users import display_monthly_active_users
 from metrics.monthly_retention import display_monthly_retention
 from metrics.new_user_signups import display_new_user_signups
@@ -160,9 +159,6 @@ def create_analytics_dashboard():
 
         with tabs[0]:
             st.header("User Activity Metrics")
-            
-            st.subheader("Monthly Metrics")
-            display_monthly_total_streams(streams)
             
             st.subheader("Weekly Metrics")
             display_avg_streams_per_user(streams)
