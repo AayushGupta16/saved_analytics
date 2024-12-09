@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 # Import metric components
 from metrics.avg_streams_per_user import display_avg_streams_per_user
 from metrics.monthly_active_users import display_monthly_active_users
-from metrics.monthly_retention import display_monthly_retention
 from metrics.new_user_signups import display_new_user_signups
 from metrics.weekly_intervals import display_weekly_streams, display_weekly_active_users
 
@@ -29,29 +28,31 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame) -> None:
     # 1. Average Streams per Week per User
     with row1_cols[0]:
         if not streams.empty:
-            # Calculate using complete weeks only
-            start_date = pd.Timestamp('2024-09-29', tz='UTC')
-            df = streams.copy()
-            df['week_number'] = ((df['created_at'] - start_date) // pd.Timedelta(weeks=1)) + 1
-            df['week_start'] = start_date + (df['week_number'] - 1) * pd.Timedelta(weeks=1)
-            
-            # Get complete weeks only (exclude current week)
+            # Calculate using only the last complete week
             today = pd.Timestamp.now(tz='UTC')
-            complete_weeks_data = df[df['week_start'] < today - pd.Timedelta(days=today.weekday())]
+            last_week_start = today - pd.Timedelta(days=today.weekday() + 7)
+            last_week_end = last_week_start + pd.Timedelta(days=7)
             
-            if not complete_weeks_data.empty:
-                weekly_streams = complete_weeks_data.groupby(['week_start', 'user_id']).size().reset_index(name='streams')
-                avg_streams = weekly_streams.groupby('week_start')['streams'].mean().mean()
+            # Filter data for just the last week
+            last_week_data = streams[
+                (streams['created_at'] >= last_week_start) & 
+                (streams['created_at'] < last_week_end)
+            ]
+            
+            if not last_week_data.empty:
+                # Calculate streams per user for the last week
+                user_streams = last_week_data.groupby('user_id').size()
+                avg_streams = user_streams.mean()
                 
                 st.metric(
-                    "Average Weekly Streams/User",
+                    "Last Week's Average Streams/User",
                     f"{avg_streams:.1f}",
-                    help="Average number of streams per user per week (excluding current week)"
+                    help="Average number of streams per user for the last complete week"
                 )
             else:
-                st.metric("Average Weekly Streams/User", "0.0")
+                st.metric("Last Week's Average Streams/User", "0.0")
         else:
-            st.metric("Average Weekly Streams/User", "No data")
+            st.metric("Last Week's Average Streams/User", "No data")
 
     # 2. Monthly Active Users (MAU)
     with row1_cols[1]:
@@ -155,7 +156,7 @@ def create_analytics_dashboard():
 
 
         # Create tabs for different metric categories
-        tabs = st.tabs(["User Activity", "Retention", "Growth"])
+        tabs = st.tabs(["User Activity", "Growth"])
 
         with tabs[0]:
             st.header("User Activity Metrics")
@@ -166,11 +167,6 @@ def create_analytics_dashboard():
             display_weekly_active_users(streams)
 
         with tabs[1]:
-            st.header("Retention Metrics")
-            # Display retention metrics
-            display_monthly_retention(streams)
-
-        with tabs[2]:
             st.header("Growth Metrics")
             # Display growth metrics
             display_new_user_signups(users)

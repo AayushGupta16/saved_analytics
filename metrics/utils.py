@@ -166,3 +166,5 @@ def display_weekly_data(data: pd.DataFrame, metric_name: str, color: str = '#1f7
         display_df.sort_values('Week Starting', ascending=False),
         hide_index=True
     )
+
+    
