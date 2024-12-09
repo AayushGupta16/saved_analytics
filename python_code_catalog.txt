@@ -1,5 +1,5 @@
 Python Code Catalog
-Generated on: 2024-12-09 06:38:14
+Generated on: 2024-12-09 06:41:16
 ================================================================================
 
 File: ./count.py
@@ -91,7 +91,7 @@ if __name__ == "__main__":
 ================================================================================
 
 File: ./metrics/avg_streams_per_user.py
-Lines of code: 28
+Lines of code: 37
 --------------------------------------------------------------------------------
 
 import streamlit as st
@@ -99,8 +99,7 @@ import pandas as pd
 
 def display_avg_streams_per_user(streams_df):
     """
-    Displays a simple average streams per user per week metric, no exclusion.
-    Just groups by week and calculates average streams per user.
+    Displays a simple average streams per user per completed week (excluding current week).
     """
     if streams_df.empty:
         st.write("No data for Average Streams per User")
@@ -110,23 +109,33 @@ def display_avg_streams_per_user(streams_df):
     if not pd.api.types.is_datetime64_any_dtype(streams_df['created_at']):
         streams_df['created_at'] = pd.to_datetime(streams_df['created_at'], utc=True)
 
-    # Group by week (ISO week), compute average
-    # We'll define a week_start as Monday-based just for demonstration
+    # Calculate Monday-based week_start
+    # Monday is weekday()=0, so subtract .weekday() days to get the Monday of that week
     streams_df['week_start'] = streams_df['created_at'] - pd.to_timedelta(streams_df['created_at'].dt.weekday, unit='D')
 
-    weekly_streams = streams_df.groupby(['week_start', 'user_id']).size().reset_index(name='streams')
+    # Exclude current (incomplete) week
+    # Current week start = Monday of the current week
+    today = pd.Timestamp.now(tz='UTC')
+    current_week_start = today - pd.to_timedelta(today.weekday(), unit='D')
+    completed_weeks = streams_df[streams_df['week_start'] < current_week_start]
+
+    if completed_weeks.empty:
+        st.write("No fully completed weeks available.")
+        return
+
+    weekly_streams = completed_weeks.groupby(['week_start', 'user_id']).size().reset_index(name='streams')
     avg_per_week = weekly_streams.groupby('week_start')['streams'].mean().reset_index(name='avg_streams')
 
-    st.write("Data for Avg Streams per User:")
-    st.dataframe(avg_per_week)  # Debug
-    st.write("Average Streams per User (Weekly):")
+    st.write("Data for Avg Streams per User (Completed Weeks Only):")
+    st.dataframe(avg_per_week)  
+    st.write("Average Streams per User (Weekly, excluding current week):")
     st.line_chart(data=avg_per_week, x='week_start', y='avg_streams')
 
 
 ================================================================================
 
 File: ./metrics/monthly_active_users.py
-Lines of code: 24
+Lines of code: 35
 --------------------------------------------------------------------------------
 
 import streamlit as st
@@ -134,8 +143,7 @@ import pandas as pd
 
 def display_monthly_active_users(streams_df):
     """
-    Displays Monthly Active Users (MAU). Counts unique user_ids per month.
-    No exclusion of current month.
+    Displays Monthly Active Users (MAU) per completed month (excluding current month).
     """
     if streams_df.empty:
         st.write("No data for Monthly Active Users")
@@ -145,19 +153,31 @@ def display_monthly_active_users(streams_df):
         streams_df['created_at'] = pd.to_datetime(streams_df['created_at'], utc=True)
     
     streams_df['year_month'] = streams_df['created_at'].dt.to_period('M')
-    mau = streams_df.groupby('year_month')['user_id'].nunique().reset_index()
+    # Identify the latest month
+    if streams_df['year_month'].empty:
+        st.write("No data after converting to monthly periods.")
+        return
+    
+    latest_month = streams_df['year_month'].max()
+    completed_months = streams_df[streams_df['year_month'] < latest_month]
+
+    if completed_months.empty:
+        st.write("No fully completed months available.")
+        return
+
+    mau = completed_months.groupby('year_month')['user_id'].nunique().reset_index()
     mau['year_month'] = mau['year_month'].dt.to_timestamp()
 
-    st.write("Data for MAU:")
-    st.dataframe(mau)  # Debug
-    st.write("Monthly Active Users:")
+    st.write("Data for MAU (Completed Months Only):")
+    st.dataframe(mau)
+    st.write("Monthly Active Users (excluding current month):")
     st.line_chart(data=mau, x='year_month', y='user_id')
 
 
 ================================================================================
 
 File: ./metrics/monthly_retention.py
-Lines of code: 23
+Lines of code: 34
 --------------------------------------------------------------------------------
 
 import streamlit as st
@@ -165,7 +185,7 @@ import pandas as pd
 
 def display_monthly_retention(streams_df):
     """
-    Simplified: Just show monthly unique users again (no real retention).
+    Just shows monthly unique users for completed months (excluding current month).
     """
     if streams_df.empty:
         st.write("No data for Monthly Retention (simplified)")
@@ -175,19 +195,30 @@ def display_monthly_retention(streams_df):
         streams_df['created_at'] = pd.to_datetime(streams_df['created_at'], utc=True)
     
     streams_df['year_month'] = streams_df['created_at'].dt.to_period('M')
-    monthly_users = streams_df.groupby('year_month')['user_id'].nunique().reset_index()
+    if streams_df['year_month'].empty:
+        st.write("No monthly data available.")
+        return
+    
+    latest_month = streams_df['year_month'].max()
+    completed_months = streams_df[streams_df['year_month'] < latest_month]
+
+    if completed_months.empty:
+        st.write("No fully completed months available for retention.")
+        return
+
+    monthly_users = completed_months.groupby('year_month')['user_id'].nunique().reset_index()
     monthly_users['year_month'] = monthly_users['year_month'].dt.to_timestamp()
 
-    st.write("Data for Monthly Retention (simplified):")
-    st.dataframe(monthly_users)  # Debug
-    st.write("Monthly User Counts (simplified retention):")
+    st.write("Data for Monthly Retention (Completed Months Only):")
+    st.dataframe(monthly_users)  
+    st.write("Monthly User Counts (excluding current month):")
     st.line_chart(data=monthly_users, x='year_month', y='user_id')
 
 
 ================================================================================
 
 File: ./metrics/new_user_signups.py
-Lines of code: 23
+Lines of code: 32
 --------------------------------------------------------------------------------
 
 import streamlit as st
@@ -195,8 +226,7 @@ import pandas as pd
 
 def display_new_user_signups(users_df):
     """
-    Displays New User Signups per week.
-    No exclusion of current week, just all data.
+    Displays New User Signups per completed week (excluding current week).
     """
     if users_df.empty:
         st.write("No user data for Signups")
@@ -205,19 +235,29 @@ def display_new_user_signups(users_df):
     if not pd.api.types.is_datetime64_any_dtype(users_df['created_at']):
         users_df['created_at'] = pd.to_datetime(users_df['created_at'], utc=True)
     
+    # Monday-based weeks
     users_df['week_start'] = users_df['created_at'] - pd.to_timedelta(users_df['created_at'].dt.weekday, unit='D')
-    weekly_signups = users_df.groupby('week_start').size().reset_index(name='new_users')
+    
+    today = pd.Timestamp.now(tz='UTC')
+    current_week_start = today - pd.to_timedelta(today.weekday(), unit='D')
+    completed_weeks = users_df[users_df['week_start'] < current_week_start]
 
-    st.write("Data for Weekly Signups:")
-    st.dataframe(weekly_signups)  # Debug
-    st.write("New User Signups (Weekly):")
+    if completed_weeks.empty:
+        st.write("No fully completed weeks available for signups.")
+        return
+
+    weekly_signups = completed_weeks.groupby('week_start').size().reset_index(name='new_users')
+
+    st.write("Data for Weekly Signups (Completed Weeks Only):")
+    st.dataframe(weekly_signups)  
+    st.write("New User Signups (Weekly, excluding current week):")
     st.line_chart(data=weekly_signups, x='week_start', y='new_users')
 
 
 ================================================================================
 
 File: ./metrics/weekly_intervals.py
-Lines of code: 41
+Lines of code: 59
 --------------------------------------------------------------------------------
 
 import streamlit as st
@@ -225,7 +265,7 @@ import pandas as pd
 
 def display_weekly_streams(streams_df):
     """
-    Weekly Stream Counts with no exclusions.
+    Weekly Stream Counts for completed weeks (excluding current week).
     """
     if streams_df.empty:
         st.write("No data for Weekly Streams")
@@ -235,16 +275,25 @@ def display_weekly_streams(streams_df):
         streams_df['created_at'] = pd.to_datetime(streams_df['created_at'], utc=True)
     
     streams_df['week_start'] = streams_df['created_at'] - pd.to_timedelta(streams_df['created_at'].dt.weekday, unit='D')
-    weekly_counts = streams_df.groupby('week_start').size().reset_index(name='streams')
 
-    st.write("Data for Weekly Streams:")
-    st.dataframe(weekly_counts)  # Debug
-    st.write("Weekly Stream Count:")
+    today = pd.Timestamp.now(tz='UTC')
+    current_week_start = today - pd.to_timedelta(today.weekday(), unit='D')
+    completed_weeks = streams_df[streams_df['week_start'] < current_week_start]
+
+    if completed_weeks.empty:
+        st.write("No fully completed weeks available for streams.")
+        return
+
+    weekly_counts = completed_weeks.groupby('week_start').size().reset_index(name='streams')
+
+    st.write("Data for Weekly Streams (Completed Weeks Only):")
+    st.dataframe(weekly_counts)  
+    st.write("Weekly Stream Count (excluding current week):")
     st.line_chart(data=weekly_counts, x='week_start', y='streams')
 
 def display_weekly_active_users(streams_df):
     """
-    Weekly Active Users with no exclusions.
+    Weekly Active Users for completed weeks (excluding current week).
     """
     if streams_df.empty:
         st.write("No data for Weekly Active Users")
@@ -254,11 +303,20 @@ def display_weekly_active_users(streams_df):
         streams_df['created_at'] = pd.to_datetime(streams_df['created_at'], utc=True)
     
     streams_df['week_start'] = streams_df['created_at'] - pd.to_timedelta(streams_df['created_at'].dt.weekday, unit='D')
-    weekly_active = streams_df.groupby(['week_start'])['user_id'].nunique().reset_index(name='active_users')
 
-    st.write("Data for Weekly Active Users:")
-    st.dataframe(weekly_active)  # Debug
-    st.write("Weekly Active Users:")
+    today = pd.Timestamp.now(tz='UTC')
+    current_week_start = today - pd.to_timedelta(today.weekday(), unit='D')
+    completed_weeks = streams_df[streams_df['week_start'] < current_week_start]
+
+    if completed_weeks.empty:
+        st.write("No fully completed weeks available for active users.")
+        return
+
+    weekly_active = completed_weeks.groupby(['week_start'])['user_id'].nunique().reset_index(name='active_users')
+
+    st.write("Data for Weekly Active Users (Completed Weeks Only):")
+    st.dataframe(weekly_active)  
+    st.write("Weekly Active Users (excluding current week):")
     st.line_chart(data=weekly_active, x='week_start', y='active_users')
 
 
@@ -468,4 +526,4 @@ if __name__ == "__main__":
 
 Summary:
 Total Python files processed: 7
-Total lines of Python code: 414
+Total lines of Python code: 472
