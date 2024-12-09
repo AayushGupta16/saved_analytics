@@ -4,10 +4,9 @@ import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
 from datetime import datetime, timezone
-
 # Import metric components
 from metrics.avg_streams_per_user import display_avg_streams_per_user
-from metrics.monthly_active_users import display_monthly_active_users
+from metrics.highlight_feedback import display_highlight_like_ratio, display_highlight_share_ratio
 from metrics.new_user_signups import display_new_user_signups
 from metrics.weekly_intervals import display_weekly_streams, display_weekly_active_users
 
@@ -156,7 +155,7 @@ def create_analytics_dashboard():
         display_summary_metrics(streams, users)
 
         # Create tabs for different metric categories
-        tabs = st.tabs(["User Activity", "Growth"])
+        tabs = st.tabs(["User Activity", "Growth", "Highlight Feedback"])
 
         with tabs[0]:
             st.header("User Activity Metrics")
@@ -175,6 +174,12 @@ def create_analytics_dashboard():
             if not highlights.empty:
                 st.subheader("Highlights Activity")
                 # Add your highlights metrics here
+
+
+        with tabs[2]:
+            st.header("Highlight Feedback Metrics")
+            display_highlight_like_ratio(highlights)
+            display_highlight_share_ratio(highlights)
 
         # Add footer with data disclaimer
         st.markdown("---")
