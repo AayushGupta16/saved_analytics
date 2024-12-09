@@ -13,6 +13,7 @@ def display_weekly_streams(streams_df):
         date_column='created_at',
         color='#1f77b4'
     )
+    
 
 def display_weekly_active_users(streams_df):
     """
