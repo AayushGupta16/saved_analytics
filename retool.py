@@ -21,26 +21,47 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame) -> None:
     """
     st.header('Summary Metrics', divider='blue')
     
-    # Create two rows of metrics for better spacing
-    row1_cols = st.columns([1, 1])
-    row2_cols = st.columns([1, 1])
+    # Create three rows of metrics for better spacing
+    row1_cols = st.columns([1, 1, 1])  # Top row for most important metrics
+    row2_cols = st.columns([1, 1, 1])  # Second row for other metrics
     
-    # 1. Average Streams per Week per User
+    # 1. MRR (Most important)
     with row1_cols[0]:
+        st.metric(
+            "Monthly Recurring Revenue",
+            "$103",
+            help="Current monthly recurring revenue"
+        )
+
+    # 2. Current Paid Users
+    with row1_cols[1]:
+        st.metric(
+            "Current Paid Users",
+            "3",
+            help="Number of paid users in the current month"
+        )
+
+    # 3. Highlight Agreement Rate
+    with row1_cols[2]:
+        st.metric(
+            "Highlight Agreement Rate",
+            "8.6%",
+            help="Percentage of highlights that match human agreement"
+        )
+
+    # 4. Average Streams per Week per User
+    with row2_cols[0]:
         if not streams.empty:
-            # Calculate using only the last complete week
             today = pd.Timestamp.now(tz='UTC')
             last_week_start = today - pd.Timedelta(days=today.weekday() + 7)
             last_week_end = last_week_start + pd.Timedelta(days=7)
             
-            # Filter data for just the last week
             last_week_data = streams[
                 (streams['created_at'] >= last_week_start) & 
                 (streams['created_at'] < last_week_end)
             ]
             
             if not last_week_data.empty:
-                # Calculate streams per user for the last week
                 user_streams = last_week_data.groupby('user_id').size()
                 avg_streams = user_streams.mean()
                 
@@ -54,8 +75,8 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame) -> None:
         else:
             st.metric("Last Week's Average Streams/User", "No data")
 
-    # 2. Monthly Active Users (MAU)
-    with row1_cols[1]:
+    # 5. Monthly Active Users (MAU)
+    with row2_cols[1]:
         if not streams.empty:
             current_date = pd.Timestamp.now(tz='UTC')
             thirty_days_ago = current_date - pd.Timedelta(days=30)
@@ -69,26 +90,8 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame) -> None:
         else:
             st.metric("Monthly Active Users", "No data")
 
-    # 3. Total Users
-    with row2_cols[0]:
-        if not users.empty:
-            total_users = len(users)
-            # Calculate user growth
-            last_month = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=30)
-            prev_total = len(users[users['created_at'] < last_month])
-            growth = ((total_users - prev_total) / prev_total * 100) if prev_total > 0 else 0
-            
-            st.metric(
-                "Total Users",
-                f"{total_users:,}",
-                f"{growth:+.1f}% in 30 days",
-                help="Total number of registered users"
-            )
-        else:
-            st.metric("Total Users", "No data")
-
-    # 4. Premium Users
-    with row2_cols[1]:
+    # 6. Premium Users (kept as requested)
+    with row2_cols[2]:
         if not users.empty:
             premium_users = users[users['is_paying'] == True].shape[0]
             total_users = len(users)
@@ -151,9 +154,6 @@ def create_analytics_dashboard():
 
         # Display summary metrics
         display_summary_metrics(streams, users)
-
-        st.caption("📊 Dotted lines and star markers (⭐) indicate projected data for the current period")
-
 
         # Create tabs for different metric categories
         tabs = st.tabs(["User Activity", "Growth"])
