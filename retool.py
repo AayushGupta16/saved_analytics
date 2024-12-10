@@ -185,7 +185,7 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame, highligh
             st.metric(
                 "Monthly Active Users",
                 f"{active_users:,}",
-                help="Unique users who streamed in the last 30 days"
+                help="Unique users who have converted a in the last 30 days"
             )
         else:
             st.metric("Monthly Active Users", "No data")
