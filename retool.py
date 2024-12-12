@@ -94,25 +94,24 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame, highligh
         else:
             st.metric("Share Rate (Week)", "No data")
 
-    # 4. Average Streams per Week per User
+        # 4. Average Streams per Week per User
     with row1_cols[3]:
         if not streams.empty:
-            today = pd.Timestamp.now(tz='UTC')
-            last_week_start = today - pd.Timedelta(days=today.weekday() + 7)
-            last_week_end = last_week_start + pd.Timedelta(days=7)
+            # Use get_weekly_metrics to calculate average streams per user
+            weekly_metrics = get_weekly_metrics(
+                streams,
+                date_column='created_at',
+                value_column='user_id',
+                agg_function='mean'
+            )
             
-            last_week_data = streams[
-                (streams['created_at'] >= last_week_start) & 
-                (streams['created_at'] < last_week_end)
-            ]
-            
-            if not last_week_data.empty:
-                user_streams = last_week_data.groupby('user_id').size()
-                avg_streams = user_streams.mean()
+            if not weekly_metrics.empty:
+                # Get the last complete week's data
+                last_complete_week = weekly_metrics[~weekly_metrics['is_extrapolated']].iloc[-1]
                 
                 st.metric(
                     "Avg Streams/User (Week)",
-                    f"{avg_streams:.1f}",
+                    f"{last_complete_week['value']:.1f}",
                     help="Average number of streams per user for the last complete week"
                 )
             else:
@@ -172,7 +171,7 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame, highligh
     with row2_cols[1]:
         st.metric(
             "Highlight Agreement Rate",
-            "8.6%",
+            "24.0%",
             help="Percentage of highlights that match human agreement"
         )
 
