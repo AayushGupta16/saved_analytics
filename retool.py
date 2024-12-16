@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone
 # Import metric components
 from metrics.avg_streams_per_user import display_avg_streams_per_user
-from metrics.highlight_feedback import display_highlight_like_ratio, display_highlight_share_ratio, get_weekly_metrics
+from metrics.highlight_feedback import display_highlight_like_ratio, display_highlight_share_ratio, get_weekly_metrics, update_summary_share_rate
 from metrics.new_user_signups import display_new_user_signups
 from metrics.weekly_intervals import display_weekly_streams, display_weekly_active_users
 
@@ -56,43 +56,7 @@ def display_summary_metrics(streams: pd.DataFrame, users: pd.DataFrame, highligh
         )
 
     # 3. Share Rate (New)
-    with row1_cols[2]:
-        if not highlights.empty:
-            df = highlights.copy()
-            
-            # Calculate share ratio the same way as in highlight_feedback.py
-            df['share_ratio'] = ((df['downloaded'] | df['link_copied']).astype(float) * 100)
-            
-            # Get weekly data using the same function as the graph
-            weekly_data = get_weekly_metrics(
-                df,
-                date_column='created_at',
-                value_column='share_ratio',
-                agg_function='mean'
-            )
-            
-            if not weekly_data.empty:
-                # Get the latest week's data (excluding current week-in-progress)
-                latest_complete_week = weekly_data[~weekly_data['is_extrapolated']].iloc[-1]
-                share_ratio = latest_complete_week['value']
-                
-                # Get previous week for delta
-                if len(weekly_data[~weekly_data['is_extrapolated']]) > 1:
-                    prev_week = weekly_data[~weekly_data['is_extrapolated']].iloc[-2]
-                    delta = share_ratio - prev_week['value']
-                else:
-                    delta = None
-                
-                st.metric(
-                    "Share Rate (Week)",
-                    f"{share_ratio:.1f}%",
-                    f"{delta:+.1f}%" if delta is not None else None,
-                    help="Percentage of highlights that were downloaded or had their link copied (last complete week)"
-                )
-            else:
-                st.metric("Share Rate (Week)", "0.0%")
-        else:
-            st.metric("Share Rate (Week)", "No data")
+    update_summary_share_rate(row1_cols, highlights)
 
         # 4. Average Streams per Week per User
     with row1_cols[3]:
