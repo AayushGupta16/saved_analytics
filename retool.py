@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone
 # Import metric components
 from metrics.avg_streams_per_user import display_avg_streams_per_user
-from metrics.highlight_feedback import display_highlight_like_ratio, display_highlight_share_ratio, get_weekly_metrics, update_summary_share_rate
+from metrics.highlight_feedback import display_highlight_share_ratio, get_weekly_metrics, update_summary_share_rate
 from metrics.new_user_signups import display_new_user_signups
 from metrics.weekly_intervals import display_weekly_streams, display_weekly_active_users
 
@@ -244,7 +244,7 @@ def create_analytics_dashboard():
 
         with tabs[2]:
             st.header("Highlight Feedback Metrics")
-            display_highlight_like_ratio(highlights)
+            # display_highlight_like_ratio(highlights)
             display_highlight_share_ratio(highlights)
 
         # Add footer with data disclaimer
