@@ -66,7 +66,7 @@ class AnalyticsDataLoader:
         grouped_streams = streams_df.groupby('period_start')
         metrics['active_users'] = grouped_streams['user_id'].nunique()
         metrics['total_streams'] = grouped_streams.size()
-        metrics['avg_streams_per_user'] = (metrics['total_streams'] / metrics['active_users']).round(2)
+        metrics['avg_streams_per_user'] = (metrics['total_streams'] / metrics['active_users']).round(4)
         
         if not highlights_df.empty:
             # Only include rated highlights
@@ -75,14 +75,14 @@ class AnalyticsDataLoader:
                 grouped_highlights = rated_highlights.groupby('period_start')
                 likes = grouped_highlights['liked'].apply(lambda x: (x == True).sum())
                 total_rated = grouped_highlights.size()
-                metrics['like_ratio'] = ((likes / total_rated) * 100).round(2)
+                metrics['like_ratio'] = ((likes / total_rated) * 100).round(4)
             
             # Calculate share rate
             highlights_df['is_shared'] = (highlights_df['downloaded'] | highlights_df['link_copied'])
             grouped_shares = highlights_df.groupby('period_start')
             shares = grouped_shares['is_shared'].sum()
             total_highlights = grouped_shares.size()
-            metrics['share_rate'] = ((shares / total_highlights) * 100).round(2)
+            metrics['share_rate'] = ((shares / total_highlights) * 100).round(4)
         
         # Convert to DataFrame
         metrics_df = pd.DataFrame(metrics)
