@@ -1,9 +1,6 @@
 import pandas as pd
 from supabase import create_client
 from datetime import datetime, timedelta
-import logging
-
-logging.basicConfig(level=logging.INFO)
 
 class AnalyticsDataLoader:
     def __init__(self, supabase_url, supabase_key, developer_ids):
@@ -25,28 +22,47 @@ class AnalyticsDataLoader:
     def _load_raw_data(self):
         """Load and clean data from Supabase"""
         try:
-            # Load streams and highlights with limits
-            streams_data = self.supabase.from_('Streams').select('*').limit(100000).execute()
-            highlights_data = self.supabase.from_('Highlights').select('*').limit(100000).execute()
-            
+            # Pagination logic for Streams and Highlights
+            streams_data = []
+            highlights_data = []
+
+            # Fetch streams in batches
+            batch_size = 1000
+            offset = 0
+            while True:
+                response = self.supabase.from_('Streams').select('*').limit(batch_size).offset(offset).execute()
+                if not response.data:
+                    break
+                streams_data.extend(response.data)
+                offset += batch_size
+
+            # Fetch highlights in batches
+            offset = 0
+            while True:
+                response = self.supabase.from_('Highlights').select('*').limit(batch_size).offset(offset).execute()
+                if not response.data:
+                    break
+                highlights_data.extend(response.data)
+                offset += batch_size
+
             # Convert to dataframes
-            streams_df = pd.DataFrame(streams_data.data)
-            highlights_df = pd.DataFrame(highlights_data.data)
+            streams_df = pd.DataFrame(streams_data)
+            highlights_df = pd.DataFrame(highlights_data)
             
             # Debugging: Log counts of rows retrieved
-            logging.info(f"Streams data count: {len(streams_df)}")
-            logging.info(f"Highlights data count: {len(highlights_df)}")
+            print(f"Total Streams data count: {len(streams_df)}")
+            print(f"Total Highlights data count: {len(highlights_df)}")
 
             # Convert timestamps
             for df in [streams_df, highlights_df]:
                 if not df.empty:
                     df['created_at'] = pd.to_datetime(df['created_at'], utc=True)
                     df['created_at'] = df['created_at'].dt.tz_localize(None)  # Remove timezone information
-                    logging.info(f"Converted timestamps to local timezone: {df['created_at'].head()}")
+                    print(df[['created_at']].head())  # Debugging: Log a sample of timestamps
                     
             return streams_df, highlights_df
         except Exception as e:
-            logging.error(f"Error loading data: {e}")
+            print(f"Error loading data: {e}")
             return pd.DataFrame(), pd.DataFrame()
 
     def _calculate_metrics(self, interval='week'):
