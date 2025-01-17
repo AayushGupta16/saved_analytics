@@ -21,9 +21,9 @@ class AnalyticsDataLoader:
     
     def _load_raw_data(self):
         """Load and clean data from Supabase"""
-        # Load streams and highlights
-        streams_data = self.supabase.from_('Streams').select('*').execute()
-        highlights_data = self.supabase.from_('Highlights').select('*').execute()
+        # Load streams and highlights with limits
+        streams_data = self.supabase.from_('Streams').select('*').limit(1300).execute()
+        highlights_data = self.supabase.from_('Highlights').select('*').limit(12000).execute()
         
         # Convert to dataframes
         streams_df = pd.DataFrame(streams_data.data)
