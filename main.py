@@ -2,6 +2,7 @@ import streamlit as st
 from supabase import create_client
 from data import AnalyticsDataLoader
 from graph import display_metrics_dashboard
+import pandas as pd
 
 def create_analytics_dashboard():
     """
@@ -22,9 +23,9 @@ def create_analytics_dashboard():
 
         # Initialize data loader
         data_loader = AnalyticsDataLoader(
-            supabase_url=st.secrets["env"]["SUPABASE_URL"],
-            supabase_key=st.secrets["env"]["SUPABASE_KEY"],
-            developer_ids=st.secrets["env"]["DEVELOPER_IDS"].split(',')
+            supabase_url=st.secrets["SUPABASE_URL"],
+            supabase_key=st.secrets["SUPABASE_KEY"],
+            developer_ids=[id.strip() for id in st.secrets["DEVELOPER_IDS"].split(',')]
         )
 
         # Add data freshness indicator

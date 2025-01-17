@@ -7,9 +7,12 @@ def create_metric_plot(data, metric_name, title, color='#1f77b4'):
     """
     Creates a consistent plotly plot for any metric
     """
+    if data.empty:
+        return None
+        
     fig = px.line(
-        data,
-        x=data.index,
+        data.reset_index(),  # Reset index to make period_start a column
+        x='period_start',
         y=metric_name,
         title=title,
         markers=True,

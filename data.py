@@ -47,7 +47,7 @@ class AnalyticsDataLoader:
         streams_df, highlights_df = self._load_raw_data()
         
         if streams_df.empty and highlights_df.empty:
-            return {}
+            return pd.DataFrame()  # Return empty DataFrame instead of dict
             
         # Determine period starts
         if interval == 'week':
@@ -78,13 +78,16 @@ class AnalyticsDataLoader:
                 metrics['like_ratio'] = ((likes / total_rated) * 100).round(2)
             
             # Calculate share rate
-            shared_mask = (highlights_df['downloaded'] | highlights_df['link_copied'])
+            highlights_df['is_shared'] = (highlights_df['downloaded'] | highlights_df['link_copied'])
             grouped_shares = highlights_df.groupby('period_start')
-            shares = grouped_shares[shared_mask].sum()
+            shares = grouped_shares['is_shared'].sum()
             total_highlights = grouped_shares.size()
             metrics['share_rate'] = ((shares / total_highlights) * 100).round(2)
         
-        return metrics
+        # Convert to DataFrame
+        metrics_df = pd.DataFrame(metrics)
+        metrics_df.index.name = 'period_start'  # Set index name
+        return metrics_df
 
     def load_all_metrics(self):
         """Load both weekly and monthly metrics"""
