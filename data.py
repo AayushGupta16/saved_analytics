@@ -1,6 +1,9 @@
 import pandas as pd
 from supabase import create_client
 from datetime import datetime, timedelta
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 class AnalyticsDataLoader:
     def __init__(self, supabase_url, supabase_key, developer_ids):
@@ -21,19 +24,30 @@ class AnalyticsDataLoader:
     
     def _load_raw_data(self):
         """Load and clean data from Supabase"""
-        streams_data = self.supabase.from_('Streams').select('*').limit(100000).execute()
-        highlights_data = self.supabase.from_('Highlights').select('*').limit(100000).execute()
-        
-        # Convert to dataframes
-        streams_df = pd.DataFrame(streams_data.data)
-        highlights_df = pd.DataFrame(highlights_data.data)
-        
-        # Convert timestamps
-        for df in [streams_df, highlights_df]:
-            if not df.empty:
-                df['created_at'] = pd.to_datetime(df['created_at'], utc=True)
-                
-        return streams_df, highlights_df
+        try:
+            # Load streams and highlights with limits
+            streams_data = self.supabase.from_('Streams').select('*').limit(100000).execute()
+            highlights_data = self.supabase.from_('Highlights').select('*').limit(100000).execute()
+            
+            # Convert to dataframes
+            streams_df = pd.DataFrame(streams_data.data)
+            highlights_df = pd.DataFrame(highlights_data.data)
+            
+            # Debugging: Log counts of rows retrieved
+            logging.info(f"Streams data count: {len(streams_df)}")
+            logging.info(f"Highlights data count: {len(highlights_df)}")
+
+            # Convert timestamps
+            for df in [streams_df, highlights_df]:
+                if not df.empty:
+                    df['created_at'] = pd.to_datetime(df['created_at'], utc=True)
+                    df['created_at'] = df['created_at'].dt.tz_localize(None)  # Remove timezone information
+                    logging.info(f"Converted timestamps to local timezone: {df['created_at'].head()}")
+                    
+            return streams_df, highlights_df
+        except Exception as e:
+            logging.error(f"Error loading data: {e}")
+            return pd.DataFrame(), pd.DataFrame()
 
     def _calculate_metrics(self, interval='week'):
         """Calculate all metrics for given interval"""
