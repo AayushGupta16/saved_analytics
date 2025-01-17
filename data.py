@@ -21,20 +21,13 @@ class AnalyticsDataLoader:
     
     def _load_raw_data(self):
         """Load and clean data from Supabase"""
-        # Load streams and highlights with limits
-        streams_data = self.supabase.from_('Streams').select('*').limit(1300).execute()
-        highlights_data = self.supabase.from_('Highlights').select('*').limit(12000).execute()
+        streams_data = self.supabase.from_('Streams').select('*').limit(100000).execute()
+        highlights_data = self.supabase.from_('Highlights').select('*').limit(100000).execute()
         
         # Convert to dataframes
         streams_df = pd.DataFrame(streams_data.data)
         highlights_df = pd.DataFrame(highlights_data.data)
         
-        # Filter out developer data
-        if not streams_df.empty:
-            streams_df = streams_df[~streams_df['user_id'].isin(self.developer_ids)]
-        if not highlights_df.empty:
-            highlights_df = highlights_df[~highlights_df['user_id'].isin(self.developer_ids)]
-            
         # Convert timestamps
         for df in [streams_df, highlights_df]:
             if not df.empty:
