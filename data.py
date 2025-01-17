@@ -53,6 +53,12 @@ class AnalyticsDataLoader:
             print(f"Total Streams data count: {len(streams_df)}")
             print(f"Total Highlights data count: {len(highlights_df)}")
 
+            # Filter out developer data
+            if not streams_df.empty:
+                streams_df = streams_df[~streams_df['user_id'].isin(self.developer_ids)]
+            if not highlights_df.empty:
+                highlights_df = highlights_df[~highlights_df['user_id'].isin(self.developer_ids)]
+
             # Convert timestamps
             for df in [streams_df, highlights_df]:
                 if not df.empty:
