@@ -47,9 +47,7 @@ def create_metric_plot(data, metric_name, title, color='#1f77b4'):
     return fig
 
 def create_dual_line_plot(data, metric1_name, metric2_name, title, color1='#1f77b4', color2='#ff7f0e'):
-    """
-    Creates a plotly plot with two lines
-    """
+    """Creates a plotly plot with two lines"""
     if data.empty:
         return None
     
@@ -59,7 +57,7 @@ def create_dual_line_plot(data, metric1_name, metric2_name, title, color1='#1f77
     fig.add_trace(go.Scatter(
         x=data.index,
         y=data[metric1_name],
-        name='VOD Downloads',
+        name='VOD',
         line=dict(color=color1),
         marker=dict(color=color1, size=8)
     ))
@@ -68,7 +66,7 @@ def create_dual_line_plot(data, metric1_name, metric2_name, title, color1='#1f77
     fig.add_trace(go.Scatter(
         x=data.index,
         y=data[metric2_name],
-        name='Livestream Downloads',
+        name='Livestream',
         line=dict(color=color2),
         marker=dict(color=color2, size=8)
     ))
@@ -88,7 +86,7 @@ def create_dual_line_plot(data, metric1_name, metric2_name, title, color1='#1f77
             font_size=24
         ),
         xaxis_title="Period Start",
-        yaxis_title="Number of Downloads",
+        yaxis_title="Count",
         height=400,
         showlegend=True,
         legend=dict(
@@ -102,39 +100,13 @@ def create_dual_line_plot(data, metric1_name, metric2_name, title, color1='#1f77
     return fig
 
 def display_metrics_dashboard(data_loader):
-    """
-    Main dashboard display function
-    """
-    # Add period selector
-    period = st.radio("Select Period", ["Weekly", "Monthly"], horizontal=True)
-    metrics = data_loader.weekly_metrics if period == "Weekly" else data_loader.monthly_metrics
+    """Display the metrics dashboard"""
+    metrics = data_loader.weekly_metrics
     
-    # Summary Cards Row
-    st.subheader("Current Period Summary")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    # Get most recent complete period's data
-    current_period = datetime.now(timezone.utc)
-    latest_metrics = {
-        'active_users': metrics['active_users'].iloc[-2],  # -2 to get last complete period
-        'avg_streams': metrics['avg_streams_per_user'].iloc[-2],
-        'share_rate': metrics['share_rate'].iloc[-2] if 'share_rate' in metrics else 0,
-        'new_users': metrics['new_users'].iloc[-2] if 'new_users' in metrics else 0
-    }
-    
-    with col1:
-        st.metric("Active Users", f"{latest_metrics['active_users']:,.0f}")
-    with col2:
-        st.metric("Avg Streams/User", f"{latest_metrics['avg_streams']:.1f}")
-    with col3:
-        st.metric("Share Rate", f"{latest_metrics['share_rate']:.1f}%")
-    with col4:
-        st.metric("New Users", f"{latest_metrics['new_users']:,.0f}")
-
     # User Activity Section
     st.header("User Activity")
     
-    # Active Users Plot
+    # Active Users
     fig_active = create_metric_plot(
         metrics,
         'active_users',
@@ -143,85 +115,78 @@ def display_metrics_dashboard(data_loader):
     )
     st.plotly_chart(fig_active, use_container_width=True)
     
-    # Average Streams per User Plot
-    fig_streams = create_metric_plot(
-        metrics,
-        'avg_streams_per_user',
-        'Average Streams per User',
-        '#2ca02c'
-    )
-    st.plotly_chart(fig_streams, use_container_width=True)
-    
-    # Total Streams Plot
-    fig_total = create_metric_plot(
-        metrics,
-        'total_streams',
-        'Total Streams',
-        '#ff7f0e'
-    )
-    st.plotly_chart(fig_total, use_container_width=True)
-    
-    # New Users Plot
+    # New Users
     if 'new_users' in metrics:
-        fig_new_users = create_metric_plot(
+        fig_new = create_metric_plot(
             metrics,
             'new_users',
             'New User Sign-ups',
-            '#17becf'  # Using a different color from the existing plots
+            '#2ca02c'
         )
-        st.plotly_chart(fig_new_users, use_container_width=True)
+        st.plotly_chart(fig_new, use_container_width=True)
+    
+    # Stream Activity Section
+    st.header("Stream Activity")
+    
+    # Total Activity
+    if 'total_streams' in metrics and 'total_livestreams' in metrics:
+        fig_total = create_dual_line_plot(
+            metrics,
+            'total_streams',
+            'total_livestreams',
+            'Total Activity',
+            '#1f77b4',
+            '#ff7f0e'
+        )
+        st.plotly_chart(fig_total, use_container_width=True)
+    
+    # Average Activity per User
+    if 'avg_streams_per_user' in metrics and 'avg_livestreams_per_user' in metrics:
+        fig_avg = create_dual_line_plot(
+            metrics,
+            'avg_streams_per_user',
+            'avg_livestreams_per_user',
+            'Average Activity per User',
+            '#2ca02c',
+            '#d62728'
+        )
+        st.plotly_chart(fig_avg, use_container_width=True)
     
     # Highlight Engagement Section
     st.header("Highlight Engagement")
     
-    # Like/Dislike Ratio Plot
-    if 'like_ratio' in metrics:
-        fig_likes = create_metric_plot(
+    # Like Ratio
+    if 'vod_like_ratio' in metrics and 'live_like_ratio' in metrics:
+        fig_likes = create_dual_line_plot(
             metrics,
-            'like_ratio',
+            'vod_like_ratio',
+            'live_like_ratio',
             'Like Ratio (%)',
-            '#d62728'
+            '#9467bd',
+            '#8c564b'
         )
         st.plotly_chart(fig_likes, use_container_width=True)
     
-    # Share Rate Plot
-    if 'share_rate' in metrics:
-        fig_shares = create_metric_plot(
+    # Share Rate
+    if 'vod_share_rate' in metrics and 'live_share_rate' in metrics:
+        fig_shares = create_dual_line_plot(
             metrics,
-            'share_rate',
+            'vod_share_rate',
+            'live_share_rate',
             'Share Rate (%)',
-            '#9467bd'
+            '#e377c2',
+            '#7f7f7f'
         )
         st.plotly_chart(fig_shares, use_container_width=True)
-
-    # Total Livestreams Plot
-    if 'total_livestreams' in metrics:
-        fig_livestreams = create_metric_plot(
-            metrics,
-            'total_livestreams',
-            'Total Livestreams',
-            '#e377c2'  # Using a pink/purple color
-        )
-        st.plotly_chart(fig_livestreams, use_container_width=True)
-
-    # Average Livestreams per User Plot
-    if 'avg_livestreams_per_user' in metrics:
-        fig_avg_livestreams = create_metric_plot(
-            metrics,
-            'avg_livestreams_per_user',
-            'Average Livestreams per User',
-            '#8c564b'  # Using a brown color
-        )
-        st.plotly_chart(fig_avg_livestreams, use_container_width=True)
-
-    # Downloaded Highlights by Stream Type Plot
+    
+    # Downloaded Highlights
     if 'vod_downloads' in metrics and 'livestream_downloads' in metrics:
         fig_downloads = create_dual_line_plot(
             metrics,
             'vod_downloads',
             'livestream_downloads',
-            'Downloaded Highlights by Stream Type',
-            '#2ca02c',  # Green for VOD
-            '#ff7f0e'   # Orange for Livestream
+            'Downloaded Highlights',
+            '#bcbd22',
+            '#17becf'
         )
         st.plotly_chart(fig_downloads, use_container_width=True)

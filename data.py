@@ -90,11 +90,10 @@ class AnalyticsDataLoader:
         streams_df, highlights_df, livestreams_df = self._load_raw_data()
         
         if streams_df.empty and highlights_df.empty and livestreams_df.empty:
-            return pd.DataFrame()  # Return empty DataFrame instead of dict
+            return pd.DataFrame()
             
         # Determine period starts
         if interval == 'week':
-            # Align to Sunday-Saturday
             streams_df['period_start'] = streams_df['created_at'].dt.to_period('W-SAT').dt.start_time
             if not highlights_df.empty:
                 highlights_df['period_start'] = highlights_df['created_at'].dt.to_period('W-SAT').dt.start_time
@@ -109,54 +108,69 @@ class AnalyticsDataLoader:
 
         metrics = {}
         
-        # Calculate metrics per period
-        grouped_streams = streams_df.groupby('period_start')
-        metrics['active_users'] = grouped_streams['user_id'].nunique()
-        metrics['total_streams'] = grouped_streams.size()
-        metrics['avg_streams_per_user'] = (metrics['total_streams'] / metrics['active_users']).round(4)
-        
+        # User Activity Metrics
+        if not streams_df.empty:
+            # Active Users
+            grouped_streams = streams_df.groupby('period_start')
+            metrics['active_users'] = grouped_streams['user_id'].nunique()
+            
+            # New Users
+            first_streams = streams_df.groupby('user_id')['created_at'].min().reset_index()
+            first_streams['period_start'] = first_streams['created_at'].dt.to_period(
+                'W-SAT' if interval == 'week' else 'M'
+            ).dt.start_time
+            new_users_series = first_streams.groupby('period_start').size()
+            metrics['new_users'] = new_users_series.reindex(metrics['active_users'].index, fill_value=0)
+            
+            # Stream Metrics
+            metrics['total_streams'] = grouped_streams.size()
+            metrics['avg_streams_per_user'] = (metrics['total_streams'] / metrics['active_users']).round(4)
+
+        # Livestream Metrics
+        if not livestreams_df.empty:
+            grouped_livestreams = livestreams_df.groupby('period_start')
+            metrics['total_livestreams'] = grouped_livestreams.size()
+            livestream_users = grouped_livestreams['user_id'].nunique()
+            metrics['avg_livestreams_per_user'] = (metrics['total_livestreams'] / livestream_users).round(4)
+
+        # Highlight Engagement Metrics
         if not highlights_df.empty:
-            # Only include rated highlights
-            rated_highlights = highlights_df[highlights_df['liked'].notna()]
-            if not rated_highlights.empty:
-                grouped_highlights = rated_highlights.groupby('period_start')
-                likes = grouped_highlights['liked'].apply(lambda x: (x == True).sum())
-                total_rated = grouped_highlights.size()
-                metrics['like_ratio'] = ((likes / total_rated) * 100).round(4)
+            # Separate highlights by type
+            vod_highlights = highlights_df[highlights_df['stream_id'].notna()]
+            live_highlights = highlights_df[highlights_df['livestream_id'].notna()]
             
-            # Calculate share rate
-            highlights_df['is_shared'] = (highlights_df['downloaded'] | highlights_df['link_copied'])
-            grouped_shares = highlights_df.groupby('period_start')
-            shares = grouped_shares['is_shared'].sum()
-            total_highlights = grouped_shares.size()
-            metrics['share_rate'] = ((shares / total_highlights) * 100).round(4)
+            # Like Ratio by type
+            for df, prefix in [(vod_highlights, 'vod'), (live_highlights, 'live')]:
+                if not df.empty:
+                    rated_highlights = df[df['liked'].notna()]
+                    if not rated_highlights.empty:
+                        grouped = rated_highlights.groupby('period_start')
+                        likes = grouped['liked'].apply(lambda x: (x == True).sum())
+                        total_rated = grouped.size()
+                        metrics[f'{prefix}_like_ratio'] = ((likes / total_rated) * 100).round(4)
             
-            # Filter for downloaded highlights
+            # Share Rate by type
+            for df, prefix in [(vod_highlights, 'vod'), (live_highlights, 'live')]:
+                if not df.empty:
+                    df['is_shared'] = (df['downloaded'] | df['link_copied'])
+                    grouped = df.groupby('period_start')
+                    shares = grouped['is_shared'].sum()
+                    total = grouped.size()
+                    metrics[f'{prefix}_share_rate'] = ((shares / total) * 100).round(4)
+            
+            # Downloads by type (already implemented)
             downloaded_highlights = highlights_df[highlights_df['downloaded'] == True]
             grouped_downloads = downloaded_highlights.groupby('period_start')
-            
-            # Count downloads by stream type
             metrics['vod_downloads'] = grouped_downloads.apply(
                 lambda x: x[x['stream_id'].notna()].shape[0]
             )
             metrics['livestream_downloads'] = grouped_downloads.apply(
                 lambda x: x[x['livestream_id'].notna()].shape[0]
             )
-        
-        if not livestreams_df.empty:
-            # Calculate livestream metrics using the Livestreams table
-            grouped_livestreams = livestreams_df.groupby('period_start')
-            
-            # Total livestreams per period
-            metrics['total_livestreams'] = grouped_livestreams.size()
-            
-            # Average livestreams per user
-            livestream_users = grouped_livestreams['user_id'].nunique()
-            metrics['avg_livestreams_per_user'] = (metrics['total_livestreams'] / livestream_users).round(4)
-        
+
         # Convert to DataFrame
         metrics_df = pd.DataFrame(metrics)
-        metrics_df.index.name = 'period_start'  # Set index name
+        metrics_df.index.name = 'period_start'
         return metrics_df
 
     def load_all_metrics(self):
