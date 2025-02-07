@@ -112,20 +112,22 @@ class AnalyticsDataLoader:
             shares = grouped_shares['is_shared'].sum()
             total_highlights = grouped_shares.size()
             metrics['share_rate'] = ((shares / total_highlights) * 100).round(4)
+            
+            # Filter for downloaded highlights
+            downloaded_highlights = highlights_df[highlights_df['downloaded'] == True]
+            grouped_downloads = downloaded_highlights.groupby('period_start')
+            
+            # Count downloads by stream type
+            metrics['vod_downloads'] = grouped_downloads.apply(
+                lambda x: x[x['stream_id'].notna()].shape[0]
+            )
+            metrics['livestream_downloads'] = grouped_downloads.apply(
+                lambda x: x[x['livestream_id'].notna()].shape[0]
+            )
         
         if not streams_df.empty:
-            # Get first stream date for each user
-            first_streams = streams_df.groupby('user_id')['created_at'].min().reset_index()
-            first_streams['period_start'] = first_streams['created_at'].dt.to_period(
-                'W-SAT' if interval == 'week' else 'M'
-            ).dt.start_time
-            
-            # Count new users per period
-            new_users = first_streams.groupby('period_start').size()
-            metrics['new_users'] = new_users
-            
-            # Calculate livestream metrics
-            livestreams = streams_df[streams_df['is_live'] == True]
+            # Calculate livestream metrics using livestream_id
+            livestreams = streams_df[streams_df['livestream_id'].notna()]
             grouped_livestreams = livestreams.groupby('period_start')
             
             # Total livestreams per period

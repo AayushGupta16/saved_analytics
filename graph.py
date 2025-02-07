@@ -46,6 +46,61 @@ def create_metric_plot(data, metric_name, title, color='#1f77b4'):
     
     return fig
 
+def create_dual_line_plot(data, metric1_name, metric2_name, title, color1='#1f77b4', color2='#ff7f0e'):
+    """
+    Creates a plotly plot with two lines
+    """
+    if data.empty:
+        return None
+    
+    fig = go.Figure()
+    
+    # Add first line
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data[metric1_name],
+        name='VOD Downloads',
+        line=dict(color=color1),
+        marker=dict(color=color1, size=8)
+    ))
+    
+    # Add second line
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data[metric2_name],
+        name='Livestream Downloads',
+        line=dict(color=color2),
+        marker=dict(color=color2, size=8)
+    ))
+    
+    fig.update_layout(
+        hovermode='x unified',
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=14,
+        ),
+        title=dict(
+            text=title,
+            x=0.5,
+            y=0.95,
+            xanchor='center',
+            yanchor='top',
+            font_size=24
+        ),
+        xaxis_title="Period Start",
+        yaxis_title="Number of Downloads",
+        height=400,
+        showlegend=True,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01
+        )
+    )
+    
+    return fig
+
 def display_metrics_dashboard(data_loader):
     """
     Main dashboard display function
@@ -158,3 +213,15 @@ def display_metrics_dashboard(data_loader):
             '#8c564b'  # Using a brown color
         )
         st.plotly_chart(fig_avg_livestreams, use_container_width=True)
+
+    # Downloaded Highlights by Stream Type Plot
+    if 'vod_downloads' in metrics and 'livestream_downloads' in metrics:
+        fig_downloads = create_dual_line_plot(
+            metrics,
+            'vod_downloads',
+            'livestream_downloads',
+            'Downloaded Highlights by Stream Type',
+            '#2ca02c',  # Green for VOD
+            '#ff7f0e'   # Orange for Livestream
+        )
+        st.plotly_chart(fig_downloads, use_container_width=True)
