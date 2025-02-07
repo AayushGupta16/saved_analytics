@@ -109,20 +109,32 @@ class AnalyticsDataLoader:
         metrics = {}
         
         # User Activity Metrics
-        if not streams_df.empty:
-            # Active Users
-            grouped_streams = streams_df.groupby('period_start')
-            metrics['active_users'] = grouped_streams['user_id'].nunique()
+        if not streams_df.empty or not livestreams_df.empty:
+            # Get all user activity periods
+            all_activity = pd.DataFrame()
             
-            # New Users
-            first_streams = streams_df.groupby('user_id')['created_at'].min().reset_index()
-            first_streams['period_start'] = first_streams['created_at'].dt.to_period(
-                'W-SAT' if interval == 'week' else 'M'
-            ).dt.start_time
-            new_users_series = first_streams.groupby('period_start').size()
+            if not streams_df.empty:
+                all_activity = pd.concat([all_activity, 
+                    streams_df[['user_id', 'period_start']]
+                ])
+            
+            if not livestreams_df.empty:
+                all_activity = pd.concat([all_activity, 
+                    livestreams_df[['user_id', 'period_start']]
+                ])
+            
+            # Calculate active users from combined activity
+            grouped_activity = all_activity.groupby('period_start')
+            metrics['active_users'] = grouped_activity['user_id'].nunique()
+            
+            # New Users (based on first activity)
+            first_activity = all_activity.groupby('user_id')['period_start'].min().reset_index()
+            new_users_series = first_activity.groupby('period_start').size()
             metrics['new_users'] = new_users_series.reindex(metrics['active_users'].index, fill_value=0)
             
-            # Stream Metrics
+        # Stream Metrics
+        if not streams_df.empty:
+            grouped_streams = streams_df.groupby('period_start')
             metrics['total_streams'] = grouped_streams.size()
             metrics['avg_streams_per_user'] = (metrics['total_streams'] / metrics['active_users']).round(4)
 
