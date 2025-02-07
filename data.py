@@ -26,6 +26,7 @@ class AnalyticsDataLoader:
             streams_data = []
             highlights_data = []
             livestreams_data = []
+            bots_data = []  # New array for bots
 
             # Fetch streams in batches
             batch_size = 1000
@@ -55,15 +56,27 @@ class AnalyticsDataLoader:
                 livestreams_data.extend(response.data)
                 offset += batch_size
 
+            # Fetch bots in batches
+            offset = 0
+            batch_size = 1000
+            while True:
+                response = self.supabase.from_('Bots').select('*').limit(batch_size).offset(offset).execute()
+                if not response.data:
+                    break
+                bots_data.extend(response.data)
+                offset += batch_size
+
             # Convert to dataframes
             streams_df = pd.DataFrame(streams_data)
             highlights_df = pd.DataFrame(highlights_data)
             livestreams_df = pd.DataFrame(livestreams_data)
+            bots_df = pd.DataFrame(bots_data)  # New dataframe for bots
             
             # Debugging: Log counts of rows retrieved
             print(f"Total Streams data count: {len(streams_df)}")
             print(f"Total Highlights data count: {len(highlights_df)}")
             print(f"Total Livestreams data count: {len(livestreams_df)}")
+            print(f"Total Bots data count: {len(bots_df)}")
 
             # Filter out developer data
             if not streams_df.empty:
@@ -79,15 +92,19 @@ class AnalyticsDataLoader:
                     df['created_at'] = pd.to_datetime(df['created_at'], utc=True)
                     df['created_at'] = df['created_at'].dt.tz_localize(None)  # Remove timezone information
                     print(df[['created_at']].head())  # Debugging: Log a sample of timestamps
-                    
-            return streams_df, highlights_df, livestreams_df
+            
+            if not bots_df.empty:
+                bots_df['created_at'] = pd.to_datetime(bots_df['created_at'], utc=True)
+                bots_df['created_at'] = bots_df['created_at'].dt.tz_localize(None)
+            
+            return streams_df, highlights_df, livestreams_df, bots_df
         except Exception as e:
             print(f"Error loading data: {e}")
-            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def _calculate_metrics(self, interval='week'):
         """Calculate all metrics for given interval"""
-        streams_df, highlights_df, livestreams_df = self._load_raw_data()
+        streams_df, highlights_df, livestreams_df, bots_df = self._load_raw_data()
         
         if streams_df.empty and highlights_df.empty and livestreams_df.empty:
             return pd.DataFrame()
@@ -179,6 +196,14 @@ class AnalyticsDataLoader:
             metrics['livestream_downloads'] = grouped_downloads.apply(
                 lambda x: x[x['livestream_id'].notna()].shape[0]
             )
+
+        # Add bot metrics after existing metrics calculations
+        if not bots_df.empty:
+            bots_df['period_start'] = bots_df['created_at'].dt.to_period(
+                'W-SAT' if interval == 'week' else 'M'
+            ).dt.start_time
+            grouped_bots = bots_df.groupby('period_start')
+            metrics['new_bots'] = grouped_bots.size()
 
         # Convert to DataFrame
         metrics_df = pd.DataFrame(metrics)

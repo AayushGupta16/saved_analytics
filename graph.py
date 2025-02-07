@@ -125,6 +125,16 @@ def display_metrics_dashboard(data_loader):
         )
         st.plotly_chart(fig_new, use_container_width=True)
     
+    # Add Bot Sign-ups graph after New Users
+    if 'new_bots' in metrics:
+        fig_bots = create_metric_plot(
+            metrics,
+            'new_bots',
+            'Bot Sign-ups',
+            '#9467bd'  # Purple color
+        )
+        st.plotly_chart(fig_bots, use_container_width=True)
+    
     # Stream Activity Section
     st.header("Stream Activity")
     
