@@ -56,14 +56,15 @@ def display_metrics_dashboard(data_loader):
     
     # Summary Cards Row
     st.subheader("Current Period Summary")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     # Get most recent complete period's data
     current_period = datetime.now(timezone.utc)
     latest_metrics = {
         'active_users': metrics['active_users'].iloc[-2],  # -2 to get last complete period
         'avg_streams': metrics['avg_streams_per_user'].iloc[-2],
-        'share_rate': metrics['share_rate'].iloc[-2] if 'share_rate' in metrics else 0
+        'share_rate': metrics['share_rate'].iloc[-2] if 'share_rate' in metrics else 0,
+        'new_users': metrics['new_users'].iloc[-2] if 'new_users' in metrics else 0
     }
     
     with col1:
@@ -72,6 +73,8 @@ def display_metrics_dashboard(data_loader):
         st.metric("Avg Streams/User", f"{latest_metrics['avg_streams']:.1f}")
     with col3:
         st.metric("Share Rate", f"{latest_metrics['share_rate']:.1f}%")
+    with col4:
+        st.metric("New Users", f"{latest_metrics['new_users']:,.0f}")
 
     # User Activity Section
     st.header("User Activity")
@@ -102,6 +105,16 @@ def display_metrics_dashboard(data_loader):
         '#ff7f0e'
     )
     st.plotly_chart(fig_total, use_container_width=True)
+    
+    # New Users Plot
+    if 'new_users' in metrics:
+        fig_new_users = create_metric_plot(
+            metrics,
+            'new_users',
+            'New User Sign-ups',
+            '#17becf'  # Using a different color from the existing plots
+        )
+        st.plotly_chart(fig_new_users, use_container_width=True)
     
     # Highlight Engagement Section
     st.header("Highlight Engagement")

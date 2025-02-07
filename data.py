@@ -113,6 +113,17 @@ class AnalyticsDataLoader:
             total_highlights = grouped_shares.size()
             metrics['share_rate'] = ((shares / total_highlights) * 100).round(4)
         
+        if not streams_df.empty:
+            # Get first stream date for each user
+            first_streams = streams_df.groupby('user_id')['created_at'].min().reset_index()
+            first_streams['period_start'] = first_streams['created_at'].dt.to_period(
+                'W-SAT' if interval == 'week' else 'M'
+            ).dt.start_time
+            
+            # Count new users per period
+            new_users = first_streams.groupby('period_start').size()
+            metrics['new_users'] = new_users
+        
         # Convert to DataFrame
         metrics_df = pd.DataFrame(metrics)
         metrics_df.index.name = 'period_start'  # Set index name
