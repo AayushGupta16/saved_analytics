@@ -138,3 +138,23 @@ def display_metrics_dashboard(data_loader):
             '#9467bd'
         )
         st.plotly_chart(fig_shares, use_container_width=True)
+
+    # Total Livestreams Plot
+    if 'total_livestreams' in metrics:
+        fig_livestreams = create_metric_plot(
+            metrics,
+            'total_livestreams',
+            'Total Livestreams',
+            '#e377c2'  # Using a pink/purple color
+        )
+        st.plotly_chart(fig_livestreams, use_container_width=True)
+
+    # Average Livestreams per User Plot
+    if 'avg_livestreams_per_user' in metrics:
+        fig_avg_livestreams = create_metric_plot(
+            metrics,
+            'avg_livestreams_per_user',
+            'Average Livestreams per User',
+            '#8c564b'  # Using a brown color
+        )
+        st.plotly_chart(fig_avg_livestreams, use_container_width=True)

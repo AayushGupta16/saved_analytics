@@ -123,6 +123,17 @@ class AnalyticsDataLoader:
             # Count new users per period
             new_users = first_streams.groupby('period_start').size()
             metrics['new_users'] = new_users
+            
+            # Calculate livestream metrics
+            livestreams = streams_df[streams_df['is_live'] == True]
+            grouped_livestreams = livestreams.groupby('period_start')
+            
+            # Total livestreams per period
+            metrics['total_livestreams'] = grouped_livestreams.size()
+            
+            # Average livestreams per user
+            livestream_users = grouped_livestreams['user_id'].nunique()
+            metrics['avg_livestreams_per_user'] = (metrics['total_livestreams'] / livestream_users).round(4)
         
         # Convert to DataFrame
         metrics_df = pd.DataFrame(metrics)
