@@ -22,9 +22,10 @@ class AnalyticsDataLoader:
     def _load_raw_data(self):
         """Load and clean data from Supabase"""
         try:
-            # Pagination logic for Streams and Highlights
+            # Pagination logic for Streams, Highlights, and Livestreams
             streams_data = []
             highlights_data = []
+            livestreams_data = []
 
             # Fetch streams in batches
             batch_size = 1000
@@ -45,37 +46,50 @@ class AnalyticsDataLoader:
                 highlights_data.extend(response.data)
                 offset += batch_size
 
+            # Fetch livestreams in batches
+            offset = 0
+            while True:
+                response = self.supabase.from_('Livestreams').select('*').limit(batch_size).offset(offset).execute()
+                if not response.data:
+                    break
+                livestreams_data.extend(response.data)
+                offset += batch_size
+
             # Convert to dataframes
             streams_df = pd.DataFrame(streams_data)
             highlights_df = pd.DataFrame(highlights_data)
+            livestreams_df = pd.DataFrame(livestreams_data)
             
             # Debugging: Log counts of rows retrieved
             print(f"Total Streams data count: {len(streams_df)}")
             print(f"Total Highlights data count: {len(highlights_df)}")
+            print(f"Total Livestreams data count: {len(livestreams_df)}")
 
             # Filter out developer data
             if not streams_df.empty:
                 streams_df = streams_df[~streams_df['user_id'].isin(self.developer_ids)]
             if not highlights_df.empty:
                 highlights_df = highlights_df[~highlights_df['user_id'].isin(self.developer_ids)]
+            if not livestreams_df.empty:
+                livestreams_df = livestreams_df[~livestreams_df['user_id'].isin(self.developer_ids)]
 
             # Convert timestamps
-            for df in [streams_df, highlights_df]:
+            for df in [streams_df, highlights_df, livestreams_df]:
                 if not df.empty:
                     df['created_at'] = pd.to_datetime(df['created_at'], utc=True)
                     df['created_at'] = df['created_at'].dt.tz_localize(None)  # Remove timezone information
                     print(df[['created_at']].head())  # Debugging: Log a sample of timestamps
                     
-            return streams_df, highlights_df
+            return streams_df, highlights_df, livestreams_df
         except Exception as e:
             print(f"Error loading data: {e}")
-            return pd.DataFrame(), pd.DataFrame()
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def _calculate_metrics(self, interval='week'):
         """Calculate all metrics for given interval"""
-        streams_df, highlights_df = self._load_raw_data()
+        streams_df, highlights_df, livestreams_df = self._load_raw_data()
         
-        if streams_df.empty and highlights_df.empty:
+        if streams_df.empty and highlights_df.empty and livestreams_df.empty:
             return pd.DataFrame()  # Return empty DataFrame instead of dict
             
         # Determine period starts
@@ -84,10 +98,14 @@ class AnalyticsDataLoader:
             streams_df['period_start'] = streams_df['created_at'].dt.to_period('W-SAT').dt.start_time
             if not highlights_df.empty:
                 highlights_df['period_start'] = highlights_df['created_at'].dt.to_period('W-SAT').dt.start_time
+            if not livestreams_df.empty:
+                livestreams_df['period_start'] = livestreams_df['created_at'].dt.to_period('W-SAT').dt.start_time
         else:  # month
             streams_df['period_start'] = streams_df['created_at'].dt.to_period('M').dt.start_time
             if not highlights_df.empty:
                 highlights_df['period_start'] = highlights_df['created_at'].dt.to_period('M').dt.start_time
+            if not livestreams_df.empty:
+                livestreams_df['period_start'] = livestreams_df['created_at'].dt.to_period('M').dt.start_time
 
         metrics = {}
         
@@ -125,10 +143,9 @@ class AnalyticsDataLoader:
                 lambda x: x[x['livestream_id'].notna()].shape[0]
             )
         
-        if not streams_df.empty:
-            # Calculate livestream metrics using livestream_id
-            livestreams = streams_df[streams_df['livestream_id'].notna()]
-            grouped_livestreams = livestreams.groupby('period_start')
+        if not livestreams_df.empty:
+            # Calculate livestream metrics using the Livestreams table
+            grouped_livestreams = livestreams_df.groupby('period_start')
             
             # Total livestreams per period
             metrics['total_livestreams'] = grouped_livestreams.size()
