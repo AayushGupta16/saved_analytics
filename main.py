@@ -36,8 +36,15 @@ def create_analytics_dashboard():
         with st.spinner('Loading metrics...'):
             data_loader.load_all_metrics()
 
-        # Display dashboard
-        display_metrics_dashboard(data_loader)
+        # Add time period selector at the top level
+        period = st.radio(
+            "Select Time Period",
+            ["Daily", "Weekly", "Monthly"],
+            horizontal=True,
+        )
+
+        # Display dashboard with selected period
+        display_metrics_dashboard(data_loader, period)
 
         # Add footer
         st.markdown("---")

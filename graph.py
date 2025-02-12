@@ -99,9 +99,16 @@ def create_dual_line_plot(data, metric1_name, metric2_name, title, color1='#1f77
     
     return fig
 
-def display_metrics_dashboard(data_loader):
+def display_metrics_dashboard(data_loader, period):
     """Display the metrics dashboard"""
-    metrics = data_loader.weekly_metrics
+    # Map selection to corresponding metrics
+    metrics_map = {
+        "Daily": data_loader.daily_metrics,
+        "Weekly": data_loader.weekly_metrics,
+        "Monthly": data_loader.monthly_metrics
+    }
+    
+    metrics = metrics_map[period]
     
     # User Activity Section
     st.header("User Activity")

@@ -110,18 +110,30 @@ class AnalyticsDataLoader:
             return pd.DataFrame()
             
         # Determine period starts
-        if interval == 'week':
+        if interval == 'day':
+            streams_df['period_start'] = streams_df['created_at'].dt.floor('D')
+            if not highlights_df.empty:
+                highlights_df['period_start'] = highlights_df['created_at'].dt.floor('D')
+            if not livestreams_df.empty:
+                livestreams_df['period_start'] = livestreams_df['created_at'].dt.floor('D')
+            if not bots_df.empty:
+                bots_df['period_start'] = bots_df['created_at'].dt.floor('D')
+        elif interval == 'week':
             streams_df['period_start'] = streams_df['created_at'].dt.to_period('W-SAT').dt.start_time
             if not highlights_df.empty:
                 highlights_df['period_start'] = highlights_df['created_at'].dt.to_period('W-SAT').dt.start_time
             if not livestreams_df.empty:
                 livestreams_df['period_start'] = livestreams_df['created_at'].dt.to_period('W-SAT').dt.start_time
+            if not bots_df.empty:
+                bots_df['period_start'] = bots_df['created_at'].dt.to_period('W-SAT').dt.start_time
         else:  # month
             streams_df['period_start'] = streams_df['created_at'].dt.to_period('M').dt.start_time
             if not highlights_df.empty:
                 highlights_df['period_start'] = highlights_df['created_at'].dt.to_period('M').dt.start_time
             if not livestreams_df.empty:
                 livestreams_df['period_start'] = livestreams_df['created_at'].dt.to_period('M').dt.start_time
+            if not bots_df.empty:
+                bots_df['period_start'] = bots_df['created_at'].dt.to_period('M').dt.start_time
 
         metrics = {}
         
@@ -199,9 +211,6 @@ class AnalyticsDataLoader:
 
         # Add bot metrics after existing metrics calculations
         if not bots_df.empty:
-            bots_df['period_start'] = bots_df['created_at'].dt.to_period(
-                'W-SAT' if interval == 'week' else 'M'
-            ).dt.start_time
             grouped_bots = bots_df.groupby('period_start')
             metrics['new_bots'] = grouped_bots.size()
 
@@ -211,6 +220,7 @@ class AnalyticsDataLoader:
         return metrics_df
 
     def load_all_metrics(self):
-        """Load both weekly and monthly metrics"""
+        """Load daily, weekly and monthly metrics"""
+        self.daily_metrics = self._calculate_metrics('day')
         self.weekly_metrics = self._calculate_metrics('week')
         self.monthly_metrics = self._calculate_metrics('month')
