@@ -22,7 +22,7 @@ class AnalyticsDataLoader:
         return first_sunday.replace(hour=0, minute=0, second=0, microsecond=0)
     
     @st.cache_data(ttl=600)  # Cache for 10 minutes
-    def _load_raw_data(_self):
+    def _load_raw_data(_self, interval='week'):
         """Load and clean data from Supabase"""
         try:
             # Pagination logic for Streams, Highlights, and Livestreams
@@ -125,14 +125,14 @@ class AnalyticsDataLoader:
     def _calculate_metrics(self, interval='week'):
         """Calculate all metrics for given interval"""
         # Use cached raw data but don't cache the calculations
-        streams_df, highlights_df, livestreams_df, bots_df, urls_df = self._load_raw_data()
+        streams_df, highlights_df, livestreams_df, bots_df, urls_df = self._load_raw_data(interval)
         
         # Initialize empty DataFrame with proper columns
         empty_metrics = pd.DataFrame(columns=[
             'active_users', 'new_users', 'total_streams', 'avg_streams_per_user',
             'total_livestreams', 'avg_livestreams_per_user', 'vod_like_ratio',
             'live_like_ratio', 'vod_share_rate', 'live_share_rate',
-            'vod_downloads', 'livestream_downloads', 'new_bots'
+            'vod_downloads', 'livestream_downloads', 'new_bots', 'total_url_views'
         ])
         empty_metrics.index.name = 'period_start'
         
@@ -148,6 +148,8 @@ class AnalyticsDataLoader:
                 livestreams_df['period_start'] = livestreams_df['created_at'].dt.floor('D')
             if not bots_df.empty:
                 bots_df['period_start'] = bots_df['created_at'].dt.floor('D')
+            if not urls_df.empty:
+                urls_df['period_start'] = urls_df['created_at'].dt.floor('D')
         elif interval == 'week':
             streams_df['period_start'] = streams_df['created_at'].dt.to_period('W-SAT').dt.start_time
             if not highlights_df.empty:
@@ -156,6 +158,8 @@ class AnalyticsDataLoader:
                 livestreams_df['period_start'] = livestreams_df['created_at'].dt.to_period('W-SAT').dt.start_time
             if not bots_df.empty:
                 bots_df['period_start'] = bots_df['created_at'].dt.to_period('W-SAT').dt.start_time
+            if not urls_df.empty:
+                urls_df['period_start'] = urls_df['created_at'].dt.to_period('W-SAT').dt.start_time
         else:  # month
             streams_df['period_start'] = streams_df['created_at'].dt.to_period('M').dt.start_time
             if not highlights_df.empty:
@@ -164,6 +168,8 @@ class AnalyticsDataLoader:
                 livestreams_df['period_start'] = livestreams_df['created_at'].dt.to_period('M').dt.start_time
             if not bots_df.empty:
                 bots_df['period_start'] = bots_df['created_at'].dt.to_period('M').dt.start_time
+            if not urls_df.empty:
+                urls_df['period_start'] = urls_df['created_at'].dt.to_period('M').dt.start_time
 
         metrics = {}
         
@@ -262,6 +268,11 @@ class AnalyticsDataLoader:
             grouped_bots = bots_df.groupby('period_start')
             metrics['new_bots'] = grouped_bots.size()
 
+        # URL View Metrics
+        if not urls_df.empty:
+            grouped_urls = urls_df.groupby('period_start')
+            metrics['total_url_views'] = grouped_urls['view_count'].sum()
+
         # Convert to DataFrame
         metrics_df = pd.DataFrame(metrics)
         metrics_df.index.name = 'period_start'
@@ -276,7 +287,7 @@ class AnalyticsDataLoader:
     def load_all_metrics(self):
         """Load daily, weekly and monthly metrics"""
         print("Loading raw data...")
-        raw_data = self._load_raw_data()
+        raw_data = self._load_raw_data('week')
         streams_df, highlights_df, livestreams_df, bots_df, urls_df = raw_data
         
         print(f"Raw data loaded: \n"

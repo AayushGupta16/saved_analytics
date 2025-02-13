@@ -184,6 +184,22 @@ def display_metrics_dashboard(data_loader, period):
         else:
             st.info("No average activity data available for this period")
     
+    # URL Views Section
+    st.header("URL Views")
+
+    # Total URL Views
+    if 'total_url_views' in metrics:
+        fig_url_views = create_metric_plot(
+            metrics,
+            'total_url_views',
+            'Total URL Views Over Time',
+            '#17becf'  # Light blue color
+        )
+        if fig_url_views is not None:
+            st.plotly_chart(fig_url_views, use_container_width=True)
+        else:
+            st.info("No URL view data available for this period")
+    
     # Highlight Engagement Section
     st.header("Highlight Engagement")
     
