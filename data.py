@@ -69,17 +69,29 @@ class AnalyticsDataLoader:
                 bots_data.extend(response.data)
                 offset += batch_size
 
+            # Fetch urls in batches
+            offset = 0
+            urls_data = []
+            while True:
+                response = _self.supabase.from_('Urls').select('*').limit(batch_size).offset(offset).execute()
+                if not response.data:
+                    break
+                urls_data.extend(response.data)
+                offset += batch_size
+
             # Convert to dataframes
             streams_df = pd.DataFrame(streams_data)
             highlights_df = pd.DataFrame(highlights_data)
             livestreams_df = pd.DataFrame(livestreams_data)
             bots_df = pd.DataFrame(bots_data)  # New dataframe for bots
+            urls_df = pd.DataFrame(urls_data)
             
             # Debugging: Log counts of rows retrieved
             print(f"Total Streams data count: {len(streams_df)}")
             print(f"Total Highlights data count: {len(highlights_df)}")
             print(f"Total Livestreams data count: {len(livestreams_df)}")
             print(f"Total Bots data count: {len(bots_df)}")
+            print(f"Total Urls data count: {len(urls_df)}")
 
             # Filter out developer data
             if not streams_df.empty:
@@ -100,15 +112,20 @@ class AnalyticsDataLoader:
                 bots_df['created_at'] = pd.to_datetime(bots_df['created_at'], utc=True)
                 bots_df['created_at'] = bots_df['created_at'].dt.tz_localize(None)
             
-            return streams_df, highlights_df, livestreams_df, bots_df
+            # Convert timestamps for urls_df
+            if not urls_df.empty:
+                urls_df['created_at'] = pd.to_datetime(urls_df['created_at'], utc=True)
+                urls_df['created_at'] = urls_df['created_at'].dt.tz_localize(None)
+            
+            return streams_df, highlights_df, livestreams_df, bots_df, urls_df
         except Exception as e:
             print(f"Error loading data: {e}")
-            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     def _calculate_metrics(self, interval='week'):
         """Calculate all metrics for given interval"""
         # Use cached raw data but don't cache the calculations
-        streams_df, highlights_df, livestreams_df, bots_df = self._load_raw_data()
+        streams_df, highlights_df, livestreams_df, bots_df, urls_df = self._load_raw_data()
         
         # Initialize empty DataFrame with proper columns
         empty_metrics = pd.DataFrame(columns=[
@@ -151,29 +168,41 @@ class AnalyticsDataLoader:
         metrics = {}
         
         # User Activity Metrics
-        if not streams_df.empty or not livestreams_df.empty:
+        if not streams_df.empty or not urls_df.empty:
             # Get all user activity periods
             all_activity = pd.DataFrame()
             
+            # Add users who have converted streams
             if not streams_df.empty:
                 all_activity = pd.concat([all_activity, 
                     streams_df[['user_id', 'period_start']]
                 ])
             
-            if not livestreams_df.empty:
-                all_activity = pd.concat([all_activity, 
-                    livestreams_df[['user_id', 'period_start']]
-                ])
+            # Add users who have urls with view_count > 1
+            if not urls_df.empty:
+                # Filter urls with view_count > 1
+                active_urls = urls_df[urls_df['view_count'] > 1]
+                if not active_urls.empty:
+                    active_urls['period_start'] = active_urls['created_at'].dt.floor('D')
+                    if interval == 'week':
+                        active_urls['period_start'] = active_urls['created_at'].dt.to_period('W-SAT').dt.start_time
+                    elif interval == 'month':
+                        active_urls['period_start'] = active_urls['created_at'].dt.to_period('M').dt.start_time
+                    
+                    all_activity = pd.concat([all_activity, 
+                        active_urls[['user_id', 'period_start']]
+                    ])
             
-            # Calculate active users from combined activity
-            grouped_activity = all_activity.groupby('period_start')
-            metrics['active_users'] = grouped_activity['user_id'].nunique()
-            
-            # New Users (based on first activity)
-            first_activity = all_activity.groupby('user_id')['period_start'].min().reset_index()
-            new_users_series = first_activity.groupby('period_start').size()
-            metrics['new_users'] = new_users_series.reindex(metrics['active_users'].index, fill_value=0)
-            
+            if not all_activity.empty:
+                # Calculate active users from combined activity
+                grouped_activity = all_activity.groupby('period_start')
+                metrics['active_users'] = grouped_activity['user_id'].nunique()
+                
+                # New Users (based on first activity)
+                first_activity = all_activity.groupby('user_id')['period_start'].min().reset_index()
+                new_users_series = first_activity.groupby('period_start').size()
+                metrics['new_users'] = new_users_series.reindex(metrics['active_users'].index, fill_value=0)
+
         # Stream Metrics
         if not streams_df.empty:
             grouped_streams = streams_df.groupby('period_start')
@@ -246,16 +275,16 @@ class AnalyticsDataLoader:
 
     def load_all_metrics(self):
         """Load daily, weekly and monthly metrics"""
-        # Get the raw data once (cached)
         print("Loading raw data...")
         raw_data = self._load_raw_data()
-        streams_df, highlights_df, livestreams_df, bots_df = raw_data
+        streams_df, highlights_df, livestreams_df, bots_df, urls_df = raw_data
         
         print(f"Raw data loaded: \n"
               f"Streams: {len(streams_df)} rows\n"
               f"Highlights: {len(highlights_df)} rows\n"
               f"Livestreams: {len(livestreams_df)} rows\n"
-              f"Bots: {len(bots_df)} rows")
+              f"Bots: {len(bots_df)} rows\n"
+              f"Urls: {len(urls_df)} rows")
         
         # Calculate metrics for each interval using the same raw data
         print("Calculating metrics...")
