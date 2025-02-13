@@ -22,19 +22,23 @@ def create_analytics_dashboard():
         st.caption('Data excludes developer activity')
 
         # Initialize data loader
-        data_loader = AnalyticsDataLoader(
-            supabase_url=st.secrets["SUPABASE_URL"],
-            supabase_key=st.secrets["SUPABASE_KEY"],
-            developer_ids=[id.strip() for id in st.secrets["DEVELOPER_IDS"].split(',')]
-        )
+        if 'data_loader' not in st.session_state:
+            data_loader = AnalyticsDataLoader(
+                supabase_url=st.secrets["SUPABASE_URL"],
+                supabase_key=st.secrets["SUPABASE_KEY"],
+                developer_ids=[id.strip() for id in st.secrets["DEVELOPER_IDS"].split(',')]
+            )
+            # Load all metrics once
+            with st.spinner('Loading metrics...'):
+                data_loader.load_all_metrics()
+            print(f"Data loader metrics after loading: Daily: {len(data_loader.daily_metrics)}, Weekly: {len(data_loader.weekly_metrics)}, Monthly: {len(data_loader.monthly_metrics)}")
+            st.session_state.data_loader = data_loader
+        else:
+            data_loader = st.session_state.data_loader
 
         # Add data freshness indicator
         last_update = pd.Timestamp.now(tz='UTC')
         st.sidebar.info(f"Data last updated: {last_update.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-
-        # Load all metrics
-        with st.spinner('Loading metrics...'):
-            data_loader.load_all_metrics()
 
         # Add time period selector at the top level
         period = st.radio(

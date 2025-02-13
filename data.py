@@ -1,13 +1,15 @@
 import pandas as pd
 from supabase import create_client
 from datetime import datetime, timedelta
+import streamlit as st
 
 class AnalyticsDataLoader:
     def __init__(self, supabase_url, supabase_key, developer_ids):
         self.supabase = create_client(supabase_url, supabase_key)
         self.developer_ids = developer_ids
-        self.weekly_metrics = {}
-        self.monthly_metrics = {}
+        self.daily_metrics = pd.DataFrame()
+        self.weekly_metrics = pd.DataFrame()
+        self.monthly_metrics = pd.DataFrame()
         
     def _get_first_sunday(self, df):
         """Get the first Sunday after the earliest data point"""
@@ -19,7 +21,8 @@ class AnalyticsDataLoader:
         first_sunday = earliest_date + timedelta(days=days_until_sunday)
         return first_sunday.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    def _load_raw_data(self):
+    @st.cache_data(ttl=600)  # Cache for 10 minutes
+    def _load_raw_data(_self):
         """Load and clean data from Supabase"""
         try:
             # Pagination logic for Streams, Highlights, and Livestreams
@@ -32,7 +35,7 @@ class AnalyticsDataLoader:
             batch_size = 1000
             offset = 0
             while True:
-                response = self.supabase.from_('Streams').select('*').limit(batch_size).offset(offset).execute()
+                response = _self.supabase.from_('Streams').select('*').limit(batch_size).offset(offset).execute()
                 if not response.data:
                     break
                 streams_data.extend(response.data)
@@ -41,7 +44,7 @@ class AnalyticsDataLoader:
             # Fetch highlights in batches
             offset = 0
             while True:
-                response = self.supabase.from_('Highlights').select('*').limit(batch_size).offset(offset).execute()
+                response = _self.supabase.from_('Highlights').select('*').limit(batch_size).offset(offset).execute()
                 if not response.data:
                     break
                 highlights_data.extend(response.data)
@@ -50,7 +53,7 @@ class AnalyticsDataLoader:
             # Fetch livestreams in batches
             offset = 0
             while True:
-                response = self.supabase.from_('Livestreams').select('*').limit(batch_size).offset(offset).execute()
+                response = _self.supabase.from_('Livestreams').select('*').limit(batch_size).offset(offset).execute()
                 if not response.data:
                     break
                 livestreams_data.extend(response.data)
@@ -60,7 +63,7 @@ class AnalyticsDataLoader:
             offset = 0
             batch_size = 1000
             while True:
-                response = self.supabase.from_('Bots').select('*').limit(batch_size).offset(offset).execute()
+                response = _self.supabase.from_('Bots').select('*').limit(batch_size).offset(offset).execute()
                 if not response.data:
                     break
                 bots_data.extend(response.data)
@@ -80,11 +83,11 @@ class AnalyticsDataLoader:
 
             # Filter out developer data
             if not streams_df.empty:
-                streams_df = streams_df[~streams_df['user_id'].isin(self.developer_ids)]
+                streams_df = streams_df[~streams_df['user_id'].isin(_self.developer_ids)]
             if not highlights_df.empty:
-                highlights_df = highlights_df[~highlights_df['user_id'].isin(self.developer_ids)]
+                highlights_df = highlights_df[~highlights_df['user_id'].isin(_self.developer_ids)]
             if not livestreams_df.empty:
-                livestreams_df = livestreams_df[~livestreams_df['user_id'].isin(self.developer_ids)]
+                livestreams_df = livestreams_df[~livestreams_df['user_id'].isin(_self.developer_ids)]
 
             # Convert timestamps
             for df in [streams_df, highlights_df, livestreams_df]:
@@ -104,10 +107,20 @@ class AnalyticsDataLoader:
 
     def _calculate_metrics(self, interval='week'):
         """Calculate all metrics for given interval"""
+        # Use cached raw data but don't cache the calculations
         streams_df, highlights_df, livestreams_df, bots_df = self._load_raw_data()
         
+        # Initialize empty DataFrame with proper columns
+        empty_metrics = pd.DataFrame(columns=[
+            'active_users', 'new_users', 'total_streams', 'avg_streams_per_user',
+            'total_livestreams', 'avg_livestreams_per_user', 'vod_like_ratio',
+            'live_like_ratio', 'vod_share_rate', 'live_share_rate',
+            'vod_downloads', 'livestream_downloads', 'new_bots'
+        ])
+        empty_metrics.index.name = 'period_start'
+        
         if streams_df.empty and highlights_df.empty and livestreams_df.empty:
-            return pd.DataFrame()
+            return empty_metrics
             
         # Determine period starts
         if interval == 'day':
@@ -211,16 +224,46 @@ class AnalyticsDataLoader:
 
         # Add bot metrics after existing metrics calculations
         if not bots_df.empty:
+            if interval == 'day':
+                bots_df['period_start'] = bots_df['created_at'].dt.floor('D')
+            else:
+                bots_df['period_start'] = bots_df['created_at'].dt.to_period(
+                    'W-SAT' if interval == 'week' else 'M'
+                ).dt.start_time
             grouped_bots = bots_df.groupby('period_start')
             metrics['new_bots'] = grouped_bots.size()
 
         # Convert to DataFrame
         metrics_df = pd.DataFrame(metrics)
         metrics_df.index.name = 'period_start'
+        
+        # Ensure all expected columns exist, fill with 0 if missing
+        for col in empty_metrics.columns:
+            if col not in metrics_df.columns:
+                metrics_df[col] = 0
+            
         return metrics_df
 
     def load_all_metrics(self):
         """Load daily, weekly and monthly metrics"""
+        # Get the raw data once (cached)
+        print("Loading raw data...")
+        raw_data = self._load_raw_data()
+        streams_df, highlights_df, livestreams_df, bots_df = raw_data
+        
+        print(f"Raw data loaded: \n"
+              f"Streams: {len(streams_df)} rows\n"
+              f"Highlights: {len(highlights_df)} rows\n"
+              f"Livestreams: {len(livestreams_df)} rows\n"
+              f"Bots: {len(bots_df)} rows")
+        
+        # Calculate metrics for each interval using the same raw data
+        print("Calculating metrics...")
         self.daily_metrics = self._calculate_metrics('day')
         self.weekly_metrics = self._calculate_metrics('week')
         self.monthly_metrics = self._calculate_metrics('month')
+        
+        print(f"Metrics calculated:\n"
+              f"Daily: {len(self.daily_metrics)} periods\n"
+              f"Weekly: {len(self.weekly_metrics)} periods\n"
+              f"Monthly: {len(self.monthly_metrics)} periods")

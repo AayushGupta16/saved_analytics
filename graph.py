@@ -120,7 +120,10 @@ def display_metrics_dashboard(data_loader, period):
         'Active Users Over Time',
         '#1f77b4'
     )
-    st.plotly_chart(fig_active, use_container_width=True)
+    if fig_active is not None:
+        st.plotly_chart(fig_active, use_container_width=True)
+    else:
+        st.info("No active user data available for this period")
     
     # New Users
     if 'new_users' in metrics:
@@ -130,7 +133,10 @@ def display_metrics_dashboard(data_loader, period):
             'New User Sign-ups',
             '#2ca02c'
         )
-        st.plotly_chart(fig_new, use_container_width=True)
+        if fig_new is not None:
+            st.plotly_chart(fig_new, use_container_width=True)
+        else:
+            st.info("No new user data available for this period")
     
     # Add Bot Sign-ups graph after New Users
     if 'new_bots' in metrics:
@@ -140,7 +146,10 @@ def display_metrics_dashboard(data_loader, period):
             'Bot Sign-ups',
             '#9467bd'  # Purple color
         )
-        st.plotly_chart(fig_bots, use_container_width=True)
+        if fig_bots is not None:
+            st.plotly_chart(fig_bots, use_container_width=True)
+        else:
+            st.info("No bot sign-up data available for this period")
     
     # Stream Activity Section
     st.header("Stream Activity")
@@ -155,7 +164,10 @@ def display_metrics_dashboard(data_loader, period):
             '#1f77b4',
             '#ff7f0e'
         )
-        st.plotly_chart(fig_total, use_container_width=True)
+        if fig_total is not None:
+            st.plotly_chart(fig_total, use_container_width=True)
+        else:
+            st.info("No total activity data available for this period")
     
     # Average Activity per User
     if 'avg_streams_per_user' in metrics and 'avg_livestreams_per_user' in metrics:
@@ -167,7 +179,10 @@ def display_metrics_dashboard(data_loader, period):
             '#2ca02c',
             '#d62728'
         )
-        st.plotly_chart(fig_avg, use_container_width=True)
+        if fig_avg is not None:
+            st.plotly_chart(fig_avg, use_container_width=True)
+        else:
+            st.info("No average activity data available for this period")
     
     # Highlight Engagement Section
     st.header("Highlight Engagement")
@@ -182,7 +197,10 @@ def display_metrics_dashboard(data_loader, period):
             '#9467bd',
             '#8c564b'
         )
-        st.plotly_chart(fig_likes, use_container_width=True)
+        if fig_likes is not None:
+            st.plotly_chart(fig_likes, use_container_width=True)
+        else:
+            st.info("No like ratio data available for this period")
     
     # Share Rate
     if 'vod_share_rate' in metrics and 'live_share_rate' in metrics:
@@ -194,7 +212,10 @@ def display_metrics_dashboard(data_loader, period):
             '#e377c2',
             '#7f7f7f'
         )
-        st.plotly_chart(fig_shares, use_container_width=True)
+        if fig_shares is not None:
+            st.plotly_chart(fig_shares, use_container_width=True)
+        else:
+            st.info("No share rate data available for this period")
     
     # Downloaded Highlights
     if 'vod_downloads' in metrics and 'livestream_downloads' in metrics:
@@ -206,4 +227,7 @@ def display_metrics_dashboard(data_loader, period):
             '#bcbd22',
             '#17becf'
         )
-        st.plotly_chart(fig_downloads, use_container_width=True)
+        if fig_downloads is not None:
+            st.plotly_chart(fig_downloads, use_container_width=True)
+        else:
+            st.info("No downloaded highlights data available for this period")
