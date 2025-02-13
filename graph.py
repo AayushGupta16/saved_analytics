@@ -138,6 +138,19 @@ def display_metrics_dashboard(data_loader, period):
         else:
             st.info("No new user data available for this period")
     
+    # Churn Rate
+    if 'churn_rate' in metrics:
+        fig_churn = create_metric_plot(
+            metrics,
+            'churn_rate',
+            'User Churn Rate (%)',
+            '#d62728'  # Red color
+        )
+        if fig_churn is not None:
+            st.plotly_chart(fig_churn, use_container_width=True)
+        else:
+            st.info("No churn rate data available for this period")
+    
     # Add Bot Sign-ups graph after New Users
     if 'new_bots' in metrics:
         fig_bots = create_metric_plot(
@@ -212,6 +225,19 @@ def display_metrics_dashboard(data_loader, period):
             st.plotly_chart(fig_avg_views, use_container_width=True)
         else:
             st.info("No average URL views data available for this period")
+    
+    # Percentage of URLs with Views
+    if 'urls_with_views_percent' in metrics:
+        fig_url_percent = create_metric_plot(
+            metrics,
+            'urls_with_views_percent',
+            'Percentage of URLs with Views',
+            '#7f7f7f'  # Gray color
+        )
+        if fig_url_percent is not None:
+            st.plotly_chart(fig_url_percent, use_container_width=True)
+        else:
+            st.info("No URL percentage data available for this period")
     
     # Highlight Engagement Section
     st.header("Highlight Engagement")

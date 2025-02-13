@@ -133,7 +133,7 @@ class AnalyticsDataLoader:
             'total_livestreams', 'avg_livestreams_per_user', 'vod_like_ratio',
             'live_like_ratio', 'vod_share_rate', 'live_share_rate',
             'vod_downloads', 'livestream_downloads', 'new_bots', 'total_url_views',
-            'avg_views_per_url'
+            'avg_views_per_url', 'urls_with_views_percent', 'churn_rate'
         ])
         empty_metrics.index.name = 'period_start'
         
@@ -188,13 +188,14 @@ class AnalyticsDataLoader:
             # Add users who have urls with view_count > 1
             if not urls_df.empty:
                 # Filter urls with view_count > 1
-                active_urls = urls_df[urls_df['view_count'] > 1]
+                active_urls = urls_df[urls_df['view_count'] > 1].copy()  # Create a copy to avoid the warning
                 if not active_urls.empty:
-                    active_urls['period_start'] = active_urls['created_at'].dt.floor('D')
-                    if interval == 'week':
-                        active_urls['period_start'] = active_urls['created_at'].dt.to_period('W-SAT').dt.start_time
-                    elif interval == 'month':
-                        active_urls['period_start'] = active_urls['created_at'].dt.to_period('M').dt.start_time
+                    if interval == 'day':
+                        active_urls.loc[:, 'period_start'] = active_urls['created_at'].dt.floor('D')
+                    elif interval == 'week':
+                        active_urls.loc[:, 'period_start'] = active_urls['created_at'].dt.to_period('W-SAT').dt.start_time
+                    else:  # month
+                        active_urls.loc[:, 'period_start'] = active_urls['created_at'].dt.to_period('M').dt.start_time
                     
                     all_activity = pd.concat([all_activity, 
                         active_urls[['user_id', 'period_start']]
@@ -276,6 +277,38 @@ class AnalyticsDataLoader:
             # Calculate average views per URL
             url_counts = grouped_urls.size()  # number of URLs per period
             metrics['avg_views_per_url'] = (metrics['total_url_views'] / url_counts).round(2)
+            
+            # Calculate percentage of URLs with views
+            urls_with_views = grouped_urls.apply(lambda x: (x['view_count'] > 0).sum())
+            metrics['urls_with_views_percent'] = ((urls_with_views / url_counts) * 100).round(2)
+
+        # Churn Rate Calculation
+        if not all_activity.empty:
+            # Get unique active users per period
+            active_users_per_period = all_activity.groupby(['period_start', 'user_id']).size().reset_index()[['period_start', 'user_id']]
+            
+            # Create a set of periods for iteration
+            periods = sorted(active_users_per_period['period_start'].unique())
+            
+            churn_rates = {}
+            for i in range(1, len(periods)):
+                current_period = periods[i]
+                previous_period = periods[i-1]
+                
+                # Get users from both periods
+                previous_users = set(active_users_per_period[active_users_per_period['period_start'] == previous_period]['user_id'])
+                current_users = set(active_users_per_period[active_users_per_period['period_start'] == current_period]['user_id'])
+                
+                # Calculate churned users (in previous but not in current)
+                churned_users = len(previous_users - current_users)
+                
+                # Calculate churn rate
+                if len(previous_users) > 0:
+                    churn_rate = (churned_users / len(previous_users)) * 100
+                    churn_rates[current_period] = round(churn_rate, 2)
+            
+            if churn_rates:
+                metrics['churn_rate'] = pd.Series(churn_rates)
 
         # Convert to DataFrame
         metrics_df = pd.DataFrame(metrics)
