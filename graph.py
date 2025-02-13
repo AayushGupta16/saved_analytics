@@ -200,6 +200,19 @@ def display_metrics_dashboard(data_loader, period):
         else:
             st.info("No URL view data available for this period")
     
+    # Average Views per URL
+    if 'avg_views_per_url' in metrics:
+        fig_avg_views = create_metric_plot(
+            metrics,
+            'avg_views_per_url',
+            'Average Views per URL',
+            '#e377c2'  # Pink color
+        )
+        if fig_avg_views is not None:
+            st.plotly_chart(fig_avg_views, use_container_width=True)
+        else:
+            st.info("No average URL views data available for this period")
+    
     # Highlight Engagement Section
     st.header("Highlight Engagement")
     

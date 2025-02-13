@@ -132,7 +132,8 @@ class AnalyticsDataLoader:
             'active_users', 'new_users', 'total_streams', 'avg_streams_per_user',
             'total_livestreams', 'avg_livestreams_per_user', 'vod_like_ratio',
             'live_like_ratio', 'vod_share_rate', 'live_share_rate',
-            'vod_downloads', 'livestream_downloads', 'new_bots', 'total_url_views'
+            'vod_downloads', 'livestream_downloads', 'new_bots', 'total_url_views',
+            'avg_views_per_url'
         ])
         empty_metrics.index.name = 'period_start'
         
@@ -272,6 +273,9 @@ class AnalyticsDataLoader:
         if not urls_df.empty:
             grouped_urls = urls_df.groupby('period_start')
             metrics['total_url_views'] = grouped_urls['view_count'].sum()
+            # Calculate average views per URL
+            url_counts = grouped_urls.size()  # number of URLs per period
+            metrics['avg_views_per_url'] = (metrics['total_url_views'] / url_counts).round(2)
 
         # Convert to DataFrame
         metrics_df = pd.DataFrame(metrics)
