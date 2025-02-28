@@ -43,7 +43,7 @@ def create_analytics_dashboard():
         # Add time period selector at the top level
         period = st.radio(
             "Select Time Period",
-            ["Daily", "Weekly", "Monthly"],
+            ["Monthly", "Weekly", "Daily"],
             horizontal=True,
         )
 
