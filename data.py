@@ -270,7 +270,7 @@ class AnalyticsDataLoader:
         metrics = {}
         
         # User Activity Metrics
-        if not streams_df.empty or not urls_df.empty:
+        if not streams_df.empty or not urls_df.empty or not highlights_df.empty:
             # Get all user activity periods
             all_activity = pd.DataFrame()
             
@@ -280,10 +280,10 @@ class AnalyticsDataLoader:
                     streams_df[['user_id', 'period_start']]
                 ])
             
-            # Add users who have urls with view_count > 1
+            # Add users who have urls with view_count >= 1 (changed from > 1)
             if not urls_df.empty:
-                # Filter urls with view_count > 1
-                active_urls = urls_df[urls_df['view_count'] > 1].copy()  # Create a copy to avoid the warning
+                # Filter urls with view_count >= 1
+                active_urls = urls_df[urls_df['view_count'] >= 1].copy()  # Create a copy to avoid the warning
                 if not active_urls.empty:
                     if interval == 'day':
                         active_urls.loc[:, 'period_start'] = active_urls['created_at'].dt.floor('D')
@@ -294,6 +294,15 @@ class AnalyticsDataLoader:
                     
                     all_activity = pd.concat([all_activity, 
                         active_urls[['user_id', 'period_start']]
+                    ])
+            
+            # Add users who have clips that were downloaded or liked/disliked
+            if not highlights_df.empty:
+                # Get clips that were downloaded or had ratings (liked/disliked)
+                active_clips = highlights_df[(highlights_df['downloaded'] == True) | (highlights_df['liked'].notna())].copy()
+                if not active_clips.empty:
+                    all_activity = pd.concat([all_activity,
+                        active_clips[['user_id', 'period_start']]
                     ])
             
             if not all_activity.empty:
