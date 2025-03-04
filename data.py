@@ -22,15 +22,107 @@ class AnalyticsDataLoader:
         return first_sunday.replace(hour=0, minute=0, second=0, microsecond=0)
     
     @st.cache_data(ttl=600)  # Cache for 10 minutes
-    def _load_raw_data(_self, interval='week'):
+    def _load_raw_data(_self, interval='week', force_reload=False):
         """Load and clean data from Supabase"""
         try:
-            # Pagination logic for Streams, Highlights, and Livestreams
+            # Check if we already have cached data stored in persistent state
+            if hasattr(st.session_state, 'cached_raw_data') and not force_reload:
+                cached_streams_df, cached_highlights_df, cached_livestreams_df, cached_bots_df, cached_urls_df = st.session_state.cached_raw_data
+                
+                # Get timestamps for last data point in each dataset
+                last_timestamps = {}
+                if not cached_streams_df.empty:
+                    last_timestamps['Streams'] = cached_streams_df['created_at'].max()
+                if not cached_highlights_df.empty:
+                    last_timestamps['Highlights'] = cached_highlights_df['created_at'].max()
+                if not cached_livestreams_df.empty:
+                    last_timestamps['Livestreams'] = cached_livestreams_df['created_at'].max()
+                if not cached_bots_df.empty:
+                    last_timestamps['Bots'] = cached_bots_df['created_at'].max()
+                if not cached_urls_df.empty:
+                    last_timestamps['Urls'] = cached_urls_df['created_at'].max()
+                
+                # Fetch only new data (since the last timestamp) and append to cached data
+                streams_data = []
+                highlights_data = []
+                livestreams_data = []
+                bots_data = []
+                urls_data = []
+                
+                # Function to fetch new records for a table
+                def fetch_new_records(table_name, last_timestamp):
+                    new_records = []
+                    batch_size = 1000
+                    offset = 0
+                    
+                    if last_timestamp:
+                        # Convert timestamp to ISO format for Supabase
+                        iso_timestamp = last_timestamp.isoformat()
+                        
+                        while True:
+                            response = _self.supabase.from_(table_name).select('*').filter('created_at', 'gt', iso_timestamp).limit(batch_size).offset(offset).execute()
+                            if not response.data:
+                                break
+                            new_records.extend(response.data)
+                            offset += batch_size
+                    else:
+                        # If no timestamp (first load), get all records
+                        while True:
+                            response = _self.supabase.from_(table_name).select('*').limit(batch_size).offset(offset).execute()
+                            if not response.data:
+                                break
+                            new_records.extend(response.data)
+                            offset += batch_size
+                            
+                    return new_records
+                
+                # Fetch new records for each table
+                streams_data = fetch_new_records('Streams', last_timestamps.get('Streams'))
+                highlights_data = fetch_new_records('Highlights', last_timestamps.get('Highlights'))
+                livestreams_data = fetch_new_records('Livestreams', last_timestamps.get('Livestreams'))
+                bots_data = fetch_new_records('Bots', last_timestamps.get('Bots'))
+                urls_data = fetch_new_records('Urls', last_timestamps.get('Urls'))
+                
+                print(f"Fetched new data: Streams: {len(streams_data)}, Highlights: {len(highlights_data)}, "
+                      f"Livestreams: {len(livestreams_data)}, Bots: {len(bots_data)}, Urls: {len(urls_data)}")
+                
+                # If we have new data, append it to the cached data
+                if any([streams_data, highlights_data, livestreams_data, bots_data, urls_data]):
+                    # Convert new data to dataframes
+                    new_streams_df = pd.DataFrame(streams_data) if streams_data else pd.DataFrame()
+                    new_highlights_df = pd.DataFrame(highlights_data) if highlights_data else pd.DataFrame()
+                    new_livestreams_df = pd.DataFrame(livestreams_data) if livestreams_data else pd.DataFrame()
+                    new_bots_df = pd.DataFrame(bots_data) if bots_data else pd.DataFrame()
+                    new_urls_df = pd.DataFrame(urls_data) if urls_data else pd.DataFrame()
+                    
+                    # Process new dataframes (convert timestamps)
+                    for df in [new_streams_df, new_highlights_df, new_livestreams_df, new_bots_df, new_urls_df]:
+                        if not df.empty and 'created_at' in df.columns:
+                            df['created_at'] = pd.to_datetime(df['created_at'], utc=True)
+                            df['created_at'] = df['created_at'].dt.tz_localize(None)
+                    
+                    # Combine with cached data
+                    streams_df = pd.concat([cached_streams_df, new_streams_df], ignore_index=True) if not new_streams_df.empty else cached_streams_df
+                    highlights_df = pd.concat([cached_highlights_df, new_highlights_df], ignore_index=True) if not new_highlights_df.empty else cached_highlights_df
+                    livestreams_df = pd.concat([cached_livestreams_df, new_livestreams_df], ignore_index=True) if not new_livestreams_df.empty else cached_livestreams_df
+                    bots_df = pd.concat([cached_bots_df, new_bots_df], ignore_index=True) if not new_bots_df.empty else cached_bots_df
+                    urls_df = pd.concat([cached_urls_df, new_urls_df], ignore_index=True) if not new_urls_df.empty else cached_urls_df
+                    
+                    # Update session state with combined data
+                    st.session_state.cached_raw_data = (streams_df, highlights_df, livestreams_df, bots_df, urls_df)
+                    
+                    return streams_df, highlights_df, livestreams_df, bots_df, urls_df
+                else:
+                    # No new data, return cached data as is
+                    return cached_streams_df, cached_highlights_df, cached_livestreams_df, cached_bots_df, cached_urls_df
+            
+            # If no cached data or force reload requested, fetch all data from scratch
             streams_data = []
             highlights_data = []
             livestreams_data = []
-            bots_data = []  # New array for bots
-
+            bots_data = []
+            urls_data = []
+            
             # Fetch streams in batches
             batch_size = 1000
             offset = 0
@@ -116,6 +208,9 @@ class AnalyticsDataLoader:
             if not urls_df.empty:
                 urls_df['created_at'] = pd.to_datetime(urls_df['created_at'], utc=True)
                 urls_df['created_at'] = urls_df['created_at'].dt.tz_localize(None)
+            
+            # Store the processed dataframes in session_state for future use
+            st.session_state.cached_raw_data = (streams_df, highlights_df, livestreams_df, bots_df, urls_df)
             
             return streams_df, highlights_df, livestreams_df, bots_df, urls_df
         except Exception as e:
@@ -321,10 +416,14 @@ class AnalyticsDataLoader:
             
         return metrics_df
 
-    def load_all_metrics(self):
-        """Load daily, weekly and monthly metrics"""
+    def load_all_metrics(self, force_reload=False):
+        """Load daily, weekly and monthly metrics
+        
+        Args:
+            force_reload (bool): If True, reload all data from database regardless of cache state
+        """
         print("Loading raw data...")
-        raw_data = self._load_raw_data('week')
+        raw_data = self._load_raw_data('week', force_reload=force_reload)
         streams_df, highlights_df, livestreams_df, bots_df, urls_df = raw_data
         
         print(f"Raw data loaded: \n"
