@@ -3,6 +3,7 @@ from supabase import create_client
 from data import AnalyticsDataLoader
 from graph import display_metrics_dashboard
 import pandas as pd
+import os
 
 def create_analytics_dashboard():
     """
@@ -24,8 +25,25 @@ def create_analytics_dashboard():
         # Sidebar controls
         st.sidebar.title("Dashboard Controls")
         
+        # Get secrets from either environment variables or st.secrets
+        # Railway provides environment variables, while local dev uses Streamlit secrets
+        def get_secret(key, default=None):
+            """Get a secret from either environment variables or Streamlit secrets"""
+            # First try environment variables (Railway)
+            value = os.environ.get(key)
+            if value is not None:
+                return value
+                
+            # Fall back to Streamlit secrets if available
+            try:
+                return st.secrets[key]
+            except (KeyError, FileNotFoundError):
+                return default
+        
         # Track the state of the developer IDs for changes
-        current_developer_ids = [id.strip() for id in st.secrets["DEVELOPER_IDS"].split(',')]
+        developer_ids_str = get_secret("DEVELOPER_IDS", "")
+        current_developer_ids = [id.strip() for id in developer_ids_str.split(',')] if developer_ids_str else []
+        
         if 'previous_developer_ids' not in st.session_state:
             st.session_state.previous_developer_ids = current_developer_ids
         
@@ -73,8 +91,8 @@ def create_analytics_dashboard():
         # Initialize data loader
         if 'data_loader' not in st.session_state:
             data_loader = AnalyticsDataLoader(
-                supabase_url=st.secrets["SUPABASE_URL"],
-                supabase_key=st.secrets["SUPABASE_KEY"],
+                supabase_url=get_secret("SUPABASE_URL"),
+                supabase_key=get_secret("SUPABASE_KEY"),
                 developer_ids=current_developer_ids
             )
             # Load all metrics once
