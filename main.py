@@ -4,12 +4,26 @@ from data import AnalyticsDataLoader
 from graph import display_metrics_dashboard
 import pandas as pd
 import os
+import socket
 
 def create_analytics_dashboard():
     """
     Create and display the main analytics dashboard with new architecture
     """
     try:
+        # Check if we need to redirect to the custom domain
+        hostname = socket.gethostname()
+        current_url = st.experimental_get_query_params().get('_url', [''])[0]
+        target_domain = "analytics.saved.gg"
+        
+        # If we're not already on the target domain, redirect
+        if not current_url.startswith(f"https://{target_domain}") and hostname != "localhost":
+            st.markdown(f"""
+                <meta http-equiv="refresh" content="0; url=https://{target_domain}">
+                <script>window.location.href = "https://{target_domain}";</script>
+                <p>Redirecting to <a href="https://{target_domain}">analytics.saved.gg</a>...</p>
+            """, unsafe_allow_html=True)
+            return
         # Set page config
         st.set_page_config(
             page_title="Platform Analytics",
